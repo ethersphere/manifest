@@ -4,6 +4,16 @@
 
 package manifest
 
+type Node struct {
+	entries *Entry
+	forks   map[string]Fork
+}
+
+type Fork struct {
+	prefix string
+	node   *Node
+}
+
 type Entry struct {
 	// temp type
 	reference string // swarm reference to the file
