@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ethersphere/manifests/mantaray"
+	"github.com/ethersphere/manifest/mantaray"
 )
 
 func TestPersistIdempotence(t *testing.T) {
