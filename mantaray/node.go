@@ -5,8 +5,10 @@
 package mantaray
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 )
 
 // Error used when lookup path does not match
@@ -101,4 +103,70 @@ func common(a, b []byte) (c []byte) {
 		c = append(c, a[i])
 	}
 	return c
+}
+
+func (n *Node) String() string {
+	buf := bytes.NewBuffer(nil)
+	io.WriteString(buf, tableCharsMap["bottom-left"])
+	io.WriteString(buf, tableCharsMap["bottom"])
+	io.WriteString(buf, tableCharsMap["top-right"])
+	io.WriteString(buf, "\n")
+	nodeStringWithPrefix(n, "  ", buf)
+	return buf.String()
+}
+
+func nodeStringWithPrefix(n *Node, prefix string, writer io.Writer) {
+	io.WriteString(writer, prefix)
+	io.WriteString(writer, tableCharsMap["left-mid"])
+	io.WriteString(writer, fmt.Sprintf("r: '%x'\n", n.ref))
+	io.WriteString(writer, prefix)
+	if len(n.forks) == 0 {
+		io.WriteString(writer, tableCharsMap["bottom-left"])
+	} else {
+		io.WriteString(writer, tableCharsMap["left-mid"])
+	}
+	io.WriteString(writer, fmt.Sprintf("e: '%s'\n", string(n.entry)))
+	counter := 0
+	for k, f := range n.forks {
+		isLast := counter != len(n.forks)-1
+		io.WriteString(writer, prefix)
+		if isLast {
+			io.WriteString(writer, tableCharsMap["left-mid"])
+		} else {
+			io.WriteString(writer, tableCharsMap["bottom-left"])
+		}
+		io.WriteString(writer, tableCharsMap["mid"])
+		io.WriteString(writer, fmt.Sprintf("[%s]", string(k)))
+		io.WriteString(writer, tableCharsMap["mid"])
+		io.WriteString(writer, tableCharsMap["top-mid"])
+		io.WriteString(writer, tableCharsMap["mid"])
+		io.WriteString(writer, fmt.Sprintf("`%s`\n", string(f.prefix)))
+		newPrefix := prefix
+		if isLast {
+			newPrefix += tableCharsMap["middle"]
+		} else {
+			newPrefix += " "
+		}
+		newPrefix += "     "
+		nodeStringWithPrefix(f.Node, newPrefix, writer)
+		counter++
+	}
+}
+
+var tableCharsMap = map[string]string{
+	"top":          "─",
+	"top-mid":      "┬",
+	"top-left":     "┌",
+	"top-right":    "┐",
+	"bottom":       "─",
+	"bottom-mid":   "┴",
+	"bottom-left":  "└",
+	"bottom-right": "┘",
+	"left":         "│",
+	"left-mid":     "├",
+	"mid":          "─",
+	"mid-mid":      "┼",
+	"right":        "│",
+	"right-mid":    "┤",
+	"middle":       "│",
 }
