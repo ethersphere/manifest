@@ -6,30 +6,30 @@ import (
 )
 
 var (
-	// ErrNoSaver  saver interface not given
+	// ErrNoSaver saver interface not given
 	ErrNoSaver = errors.New("Node is not persisted but no saver")
 	// ErrNoLoader saver interface not given
 	ErrNoLoader = errors.New("Node is reference but no loader")
 )
 
-// Loader  defines a generic interface to retrieve nodes
+// Loader defines a generic interface to retrieve nodes
 // from a persistent storage
-// for read only  operations only
+// for read only operations only
 type Loader interface {
 	Load([]byte) ([]byte, error)
 }
 
-// Saver  defines a generic interface to persist  nodes
+// Saver defines a generic interface to persist nodes
 // for write operations
 type Saver interface {
 	Save([]byte) ([]byte, error)
 }
 
 // LoadSaver is a composite interface of Loader and Saver
-// it is meant to be implemented as  thin wrappers around persistent storage like Swarm
+// it is meant to be implemented as thin wrappers around persistent storage like Swarm
 type LoadSaver interface {
 	Loader
-	Save([]byte) ([]byte, error)
+	Saver
 }
 
 func (n *Node) load(l Loader) error {
