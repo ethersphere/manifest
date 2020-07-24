@@ -75,6 +75,17 @@ func (n *Node) Add(path []byte, entry []byte, ls LoadSaver) error {
 	f := n.forks[path[0]]
 	if f == nil {
 		nn := New()
+		// check for prefix size limit
+		if len(path) > 32 {
+			prefix := path[:32]
+			rest := path[32:]
+			err := nn.Add(rest, entry, ls)
+			if err != nil {
+				return err
+			}
+			n.forks[path[0]] = &fork{prefix, nn}
+			return nil
+		}
 		nn.entry = entry
 		n.forks[path[0]] = &fork{path, nn}
 		return nil
