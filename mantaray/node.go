@@ -9,7 +9,8 @@ import (
 
 // Error used when lookup path does not match
 var (
-	ErrNotFound = errors.New("not found")
+	ErrNotFound  = errors.New("not found")
+	ErrEmptyPath = errors.New("empty path")
 )
 
 // Node represents a mantaray Node
@@ -103,6 +104,33 @@ func (n *Node) Add(path []byte, entry []byte, ls LoadSaver) error {
 	}
 	n.forks[path[0]] = &fork{c, nn}
 	return nil
+}
+
+// Remove removes a path from the node
+func (n *Node) Remove(path []byte, ls LoadSaver) error {
+	if len(path) == 0 {
+		return ErrEmptyPath
+	}
+	if n.forks == nil {
+		if err := n.load(ls); err != nil {
+			return err
+		}
+	}
+	f := n.forks[path[0]]
+	if f == nil {
+		return ErrNotFound
+	}
+	prefixIndex := bytes.Index(path, f.prefix)
+	if prefixIndex != 0 {
+		return ErrNotFound
+	}
+	rest := path[len(f.prefix):]
+	if len(rest) == 0 {
+		// full path matched
+		delete(n.forks, path[0])
+		return nil
+	}
+	return f.Node.Remove(rest, ls)
 }
 
 func common(a, b []byte) (c []byte) {
