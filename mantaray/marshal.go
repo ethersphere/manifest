@@ -10,6 +10,10 @@ import (
 )
 
 const (
+	PathSeparator = '/' // path separator
+)
+
+const (
 	preambleSize = 64
 	forkSize     = 64
 )
@@ -47,6 +51,20 @@ func (n *Node) MarshalBinary() (bytes []byte, err error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// add info about fork node type
+	// NOTE: variable size
+	nodeTypesBytes := []byte{}
+	err = index.iter(func(b byte) error {
+		nt := n.forks[b].nodeType
+		nodeTypesBytes = append(nodeTypesBytes, byte(nt))
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	bytes = append(bytes, nodeTypesBytes...)
+
 	return bytes, nil
 }
 
@@ -100,11 +118,23 @@ func (n *Node) UnmarshalBinary(bytes []byte) error {
 	offset := preambleSize
 	bb := &bitsForBytes{}
 	bb.fromBytes(bytes[32:])
-	return bb.iter(func(b byte) error {
+	err := bb.iter(func(b byte) error {
 		f := &fork{}
 		f.fromBytes(bytes[offset : offset+forkSize])
 		n.forks[b] = f
 		offset += forkSize
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	// read info about fork node type
+	// process fork node types sequentally
+	// NOTE: this MUST come after reading forks
+	return bb.iter(func(b byte) error {
+		n.forks[b].nodeType = uint8(bytes[offset])
+		offset++
 		return nil
 	})
 }
@@ -130,14 +160,14 @@ func nodeRefBytes(f *fork) []byte {
 func prefixToBytes(prefix []byte) (bytes []byte) {
 	bytes = append(bytes, prefix...)
 	for i := len(prefix); i < 32; i++ {
-		bytes = append(bytes, '/')
+		bytes = append(bytes, PathSeparator)
 	}
 	return bytes
 }
 
 func bytesToPrefix(bytes []byte) (prefix []byte) {
 	for _, b := range bytes {
-		if b != '/' {
+		if b != PathSeparator {
 			prefix = append(prefix, b)
 		}
 	}

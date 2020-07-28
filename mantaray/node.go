@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 )
 
 // Error used when lookup path does not match
@@ -19,15 +20,24 @@ var (
 
 // Node represents a mantaray Node
 type Node struct {
-	ref   []byte // reference to uninstantiated Node persisted serialised
-	entry []byte
-	forks map[byte]*fork
+	nodeType uint8
+	ref      []byte // reference to uninstantiated Node persisted serialised
+	entry    []byte
+	forks    map[byte]*fork
 }
 
 type fork struct {
 	prefix []byte // the non-branching part of the subpath
 	*Node         // in memory structure that represents the Node
 }
+
+const (
+	nodeTypeValue             = uint8(2)
+	nodeTypeEdge              = uint8(4)
+	nodeTypeWithPathSeparator = uint8(8)
+
+	nodeTypeMask = uint8(255)
+)
 
 // NewNodeRef is the exported Node constructor used to represent manifests by reference
 func NewNodeRef(ref []byte) *Node {
@@ -41,6 +51,42 @@ func New() *Node {
 
 func notFound(path []byte) error {
 	return fmt.Errorf("entry on '%s' ('%x'): %w", path, path, ErrNotFound)
+}
+
+func (n *Node) isValueType() bool {
+	return n.nodeType&nodeTypeValue == nodeTypeValue
+}
+
+func (n *Node) isEdgeType() bool {
+	return n.nodeType&nodeTypeEdge == nodeTypeEdge
+}
+
+func (n *Node) isWithPathSeparatorType() bool {
+	return n.nodeType&nodeTypeWithPathSeparator == nodeTypeWithPathSeparator
+}
+
+func (n *Node) makeValue() {
+	n.nodeType = n.nodeType | nodeTypeValue
+}
+
+func (n *Node) makeEdge() {
+	n.nodeType = n.nodeType | nodeTypeEdge
+}
+
+func (n *Node) makeWithPathSeparator() {
+	n.nodeType = n.nodeType | nodeTypeWithPathSeparator
+}
+
+func (n *Node) makeNotValue() {
+	n.nodeType = (nodeTypeMask ^ nodeTypeValue) & n.nodeType
+}
+
+func (n *Node) makeNotEdge() {
+	n.nodeType = (nodeTypeMask ^ nodeTypeEdge) & n.nodeType
+}
+
+func (n *Node) makeNotWithPathSeparator() {
+	n.nodeType = (nodeTypeMask ^ nodeTypeWithPathSeparator) & n.nodeType
 }
 
 // Lookup finds the entry for a path or returns error if not found
@@ -88,26 +134,46 @@ func (n *Node) Add(path []byte, entry []byte, ls LoadSaver) error {
 			if err != nil {
 				return err
 			}
+			nn.updateIsWithPathSeparator(prefix)
 			n.forks[path[0]] = &fork{prefix, nn}
+			n.makeEdge()
 			return nil
 		}
 		nn.entry = entry
+		nn.makeValue()
+		nn.updateIsWithPathSeparator(path)
 		n.forks[path[0]] = &fork{path, nn}
+		n.makeEdge()
 		return nil
 	}
 	c := common(f.prefix, path)
 	rest := f.prefix[len(c):]
 	nn := f.Node
 	if len(rest) > 0 {
+		// move current common prefix node
 		nn = New()
+		f.Node.updateIsWithPathSeparator(rest)
 		nn.forks[rest[0]] = &fork{rest, f.Node}
+		nn.makeEdge()
 	}
+	// NOTE: special case on edge split
+	nn.updateIsWithPathSeparator(path)
+	// add new for shared prefix
 	err := nn.Add(path[len(c):], entry, ls)
 	if err != nil {
 		return err
 	}
 	n.forks[path[0]] = &fork{c, nn}
+	n.makeEdge()
 	return nil
+}
+
+func (n *Node) updateIsWithPathSeparator(path []byte) {
+	if bytes.IndexRune(path, PathSeparator) > 0 {
+		n.makeWithPathSeparator()
+	} else {
+		n.makeNotWithPathSeparator()
+	}
 }
 
 // Remove removes a path from the node
@@ -158,6 +224,21 @@ func nodeStringWithPrefix(n *Node, prefix string, writer io.Writer) {
 	io.WriteString(writer, prefix)
 	io.WriteString(writer, tableCharsMap["left-mid"])
 	io.WriteString(writer, fmt.Sprintf("r: '%x'\n", n.ref))
+	io.WriteString(writer, prefix)
+	io.WriteString(writer, tableCharsMap["left-mid"])
+	io.WriteString(writer, fmt.Sprintf("t: '%s'", strconv.FormatInt(int64(n.nodeType), 2)))
+	io.WriteString(writer, fmt.Sprint(" ["))
+	if n.isValueType() {
+		io.WriteString(writer, fmt.Sprint(" Value"))
+	}
+	if n.isEdgeType() {
+		io.WriteString(writer, fmt.Sprint(" Edge"))
+	}
+	if n.isWithPathSeparatorType() {
+		io.WriteString(writer, fmt.Sprint(" PathSeparator"))
+	}
+	io.WriteString(writer, fmt.Sprint(" ]"))
+	io.WriteString(writer, fmt.Sprint("\n"))
 	io.WriteString(writer, prefix)
 	if len(n.forks) == 0 {
 		io.WriteString(writer, tableCharsMap["bottom-left"])
