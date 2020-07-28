@@ -9,13 +9,11 @@ import (
 	"net/http"
 
 	"github.com/ethersphere/bee/pkg/manifest"
+	"github.com/ethersphere/bee/pkg/swarm"
 )
 
+// verify JSONParser implements the manifest.Parser interface
 var _ manifest.Parser = (*JSONParser)(nil)
-
-type Address struct {
-	b []byte
-}
 
 type JSONParser struct{}
 
@@ -30,6 +28,7 @@ func (m *JSONParser) Parse(bytes []byte) (manifest.Interface, error) {
 	return mi, err
 }
 
+// verify JSONManifest implements the manifest.Interface interface
 var _ manifest.Interface = (*JSONManifest)(nil)
 
 type JSONManifest struct {
@@ -66,15 +65,16 @@ func (m *JSONManifest) Serialize() ([]byte, error) {
 	return json.Marshal(m)
 }
 
+// verify JSONEntry implements the manifest.Entry interface
 var _ manifest.Entry = (*JSONEntry)(nil)
 
 type JSONEntry struct {
-	Reference Address     `json:"reference"`
-	Name      string      `json:"name"`
-	Headers   http.Header `json:"headers"`
+	Reference swarm.Address `json:"reference"`
+	Name      string        `json:"name"`
+	Headers   http.Header   `json:"headers"`
 }
 
-func (me JSONEntry) GetReference() Address {
+func (me JSONEntry) GetReference() swarm.Address {
 	return me.Reference
 }
 
