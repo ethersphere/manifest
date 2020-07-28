@@ -5,6 +5,7 @@
 package mantaray
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 )
@@ -27,18 +28,36 @@ var (
 	ErrForkIvalid = errors.New("fork node without reference")
 )
 
+var nonceFn = func(p []byte) (n int, err error) {
+	return rand.Read(p)
+}
+
 // MarshalBinary serialises the node
 func (n *Node) MarshalBinary() (bytes []byte, err error) {
 	if n.forks == nil {
 		return nil, ErrInvalid
 	}
+	bytes = make([]byte, 128)
+
+	if len(n.nonce) == 0 {
+		// generate nonce
+		nonce := make([]byte, 32)
+		for i := 0; i < 32; {
+			read, _ := nonceFn(nonce[i:])
+			i += read
+		}
+		n.nonce = nonce
+	}
+	copy(bytes[32:64], n.nonce)
+
+	copy(bytes[64:96], n.entry)
+
 	var index = &bitsForBytes{}
 	for k := range n.forks {
 		index.set(k)
 	}
-	bytes = make([]byte, 32)
-	copy(bytes, n.entry)
-	bytes = append(bytes, index.bytes()...)
+	copy(bytes[96:128], index.bytes())
+
 	err = index.iter(func(b byte) error {
 		f := n.forks[b]
 		ref, err := f.bytes()
@@ -113,11 +132,16 @@ func (n *Node) UnmarshalBinary(bytes []byte) error {
 	if len(bytes) < preambleSize {
 		return ErrTooShort
 	}
-	n.entry = append([]byte{}, bytes[0:32]...)
+	offset := 0
+	offset += 32
+	n.nonce = append([]byte{}, bytes[offset:offset+32]...)
+	offset += 32
+	n.entry = append([]byte{}, bytes[offset:offset+32]...)
+	offset += 32
 	n.forks = make(map[byte]*fork)
-	offset := preambleSize
 	bb := &bitsForBytes{}
-	bb.fromBytes(bytes[32:])
+	bb.fromBytes(bytes[offset:])
+	offset += 32
 	err := bb.iter(func(b byte) error {
 		f := &fork{}
 		f.fromBytes(bytes[offset : offset+forkSize])

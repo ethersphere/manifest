@@ -21,6 +21,7 @@ var (
 // Node represents a mantaray Node
 type Node struct {
 	nodeType uint8
+	nonce    []byte
 	ref      []byte // reference to uninstantiated Node persisted serialised
 	entry    []byte
 	forks    map[byte]*fork
@@ -87,6 +88,12 @@ func (n *Node) makeNotEdge() {
 
 func (n *Node) makeNotWithPathSeparator() {
 	n.nodeType = (nodeTypeMask ^ nodeTypeWithPathSeparator) & n.nodeType
+}
+
+func (n *Node) SetNonce(nonce []byte) {
+	bytes := make([]byte, 32)
+	copy(bytes, nonce)
+	n.nonce = bytes
 }
 
 // Lookup finds the entry for a path or returns error if not found
