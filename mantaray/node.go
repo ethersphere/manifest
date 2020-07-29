@@ -96,15 +96,15 @@ func (n *Node) SetNonce(nonce []byte) {
 	n.nonce = bytes
 }
 
-// Lookup finds the entry for a path or returns error if not found
-func (n *Node) Lookup(path []byte, l Loader) ([]byte, error) {
+// LookupNode finds the node for a path or returns error if not found
+func (n *Node) LookupNode(path []byte, l Loader) (*Node, error) {
 	if n.forks == nil {
 		if err := n.load(l); err != nil {
 			return nil, err
 		}
 	}
 	if len(path) == 0 {
-		return n.entry, nil
+		return n, nil
 	}
 	f := n.forks[path[0]]
 	if f == nil {
@@ -112,9 +112,18 @@ func (n *Node) Lookup(path []byte, l Loader) ([]byte, error) {
 	}
 	c := common(f.prefix, path)
 	if len(c) == len(f.prefix) {
-		return f.Node.Lookup(path[len(c):], l)
+		return f.Node.LookupNode(path[len(c):], l)
 	}
 	return nil, notFound(path)
+}
+
+// Lookup finds the entry for a path or returns error if not found
+func (n *Node) Lookup(path []byte, l Loader) ([]byte, error) {
+	node, err := n.LookupNode(path, l)
+	if err != nil {
+		return nil, err
+	}
+	return node.entry, nil
 }
 
 // Add adds an entry to the path
@@ -215,6 +224,56 @@ func common(a, b []byte) (c []byte) {
 		c = append(c, a[i])
 	}
 	return c
+}
+
+// WalkFunc is the type of the function called for each node visited by Walk.
+type WalkFunc func(path []byte, node *Node, err error) error
+
+func walkFnCopyBytes(path []byte, node *Node, err error, walkFn WalkFunc) error {
+	return walkFn(append(path[:0:0], path...), node, nil)
+}
+
+// walk recursively descends path, calling walkFn.
+func walk(path []byte, l Loader, n *Node, walkFn WalkFunc) error {
+	if n.forks == nil {
+		if err := n.load(l); err != nil {
+			return err
+		}
+	}
+
+	if n.isValueType() {
+		err := walkFnCopyBytes(path, n, nil, walkFn)
+		if err != nil {
+			return err
+		}
+	}
+
+	if n.isEdgeType() {
+		for _, v := range n.forks {
+			nextPath := append(path[:0:0], path...)
+			nextPath = append(nextPath, v.prefix...)
+
+			err := walk(nextPath, l, v.Node, walkFn)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// Walk walks the node tree structure rooted at root, calling walkFn for each
+// node in the tree, including root. All errors that arise visiting nodes
+// are filtered by walkFn.
+func (n *Node) Walk(root []byte, l Loader, walkFn WalkFunc) error {
+	node, err := n.LookupNode(root, l)
+	if err != nil {
+		err = walkFn(root, nil, err)
+	} else {
+		err = walk(root, l, node, walkFn)
+	}
+	return err
 }
 
 func (n *Node) String() string {
