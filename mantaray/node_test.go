@@ -3,6 +3,7 @@ package mantaray
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"testing"
 )
 
@@ -109,6 +110,67 @@ func TestRemove(t *testing.T) {
 				if !errors.Is(err, ErrNotFound) {
 					t.Fatalf("expected not found error, got %v", err)
 				}
+			}
+
+		})
+	}
+}
+
+func TestWalk(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		toAdd [][]byte
+	}{
+		{
+			name: "simple",
+			toAdd: [][]byte{
+				[]byte("index.html"),
+				[]byte("img/1.png"),
+				[]byte("img/2.png"),
+				[]byte("robots.txt"),
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			n := New()
+
+			for i := 0; i < len(tc.toAdd); i++ {
+				c := tc.toAdd[i]
+				err := n.Add(c, c, nil)
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+			}
+
+			walkedCount := 0
+
+			walker := func(path []byte, node *Node, err error) error {
+				walkedCount++
+
+				pathFound := false
+
+				for i := 0; i < len(tc.toAdd); i++ {
+					c := tc.toAdd[i]
+					if bytes.Equal(path, c) {
+						pathFound = true
+						break
+					}
+				}
+
+				if !pathFound {
+					return fmt.Errorf("walkFn returned unknown path: %s", path)
+				}
+
+				return nil
+			}
+			// Expect no errors.
+			err := n.Walk([]byte{}, nil, walker)
+			if err != nil {
+				t.Fatalf("no error expected, found: %s", err)
+			}
+
+			if len(tc.toAdd) != walkedCount {
+				t.Errorf("expected %d nodes, got %d", len(tc.toAdd), walkedCount)
 			}
 
 		})
