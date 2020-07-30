@@ -2,6 +2,7 @@ package mantaray
 
 import (
 	"crypto/rand"
+	"encoding/binary"
 	"errors"
 	"fmt"
 )
@@ -10,9 +11,24 @@ const (
 	PathSeparator = '/' // path separator
 )
 
+// Node header fields constants.
+const (
+	// magicNode is 4 bytes at the head of a node.
+	magicNode = 0x2D833CCB
+	// magicNodeSize is the size in bytes of magicNode.
+	magicNodeSize         = 4
+	nodeFormatV1          = 1
+	nodeFormatVersionSize = 1
+	nodeForkRefBytesSize  = 1
+	nodeHeaderPaddingSize = 26 // configured to make header size 64
+	nodeNonceSize         = 32
+	// nodeHeaderSize defines the total size of the header part.
+	nodeHeaderSize = magicNodeSize + nodeFormatVersionSize + nodeForkRefBytesSize + nodeHeaderPaddingSize + nodeNonceSize
+)
+
 const (
 	preambleSize = 64
-	forkSize     = 64
+	forkSize     = 64 + nodeForkRefBytesSize
 )
 
 var (
@@ -33,26 +49,45 @@ func (n *Node) MarshalBinary() (bytes []byte, err error) {
 	if n.forks == nil {
 		return nil, ErrInvalid
 	}
-	bytes = make([]byte, 128)
+
+	// header
+
+	headerBytes := make([]byte, nodeHeaderSize)
+
+	binary.BigEndian.PutUint32(headerBytes[:magicNodeSize], magicNode)
+	headerBytes[4] = nodeFormatV1
+	headerBytes[5] = nodeForkRefBytesSize
 
 	if len(n.nonce) == 0 {
 		// generate nonce
-		nonce := make([]byte, 32)
-		for i := 0; i < 32; {
+		nonce := make([]byte, nodeNonceSize)
+		for i := 0; i < nodeNonceSize; {
 			read, _ := nonceFn(nonce[i:])
 			i += read
 		}
 		n.nonce = nonce
 	}
-	copy(bytes[32:64], n.nonce)
+	copy(headerBytes[nodeHeaderSize-nodeNonceSize:nodeHeaderSize], n.nonce)
 
-	copy(bytes[64:96], n.entry)
+	bytes = append(bytes, headerBytes...)
+
+	// entry
+
+	entryBytes := make([]byte, 32)
+	copy(entryBytes, n.entry)
+	bytes = append(bytes, entryBytes...)
+
+	// index
+
+	indexBytes := make([]byte, 32)
 
 	var index = &bitsForBytes{}
 	for k := range n.forks {
 		index.set(k)
 	}
-	copy(bytes[96:128], index.bytes())
+	copy(indexBytes, index.bytes())
+
+	bytes = append(bytes, indexBytes...)
 
 	err = index.iter(func(b byte) error {
 		f := n.forks[b]
@@ -124,15 +159,21 @@ func (bb *bitsForBytes) iter(f func(byte) error) error {
 
 // UnmarshalBinary deserialises a node
 func (n *Node) UnmarshalBinary(bytes []byte) error {
-	if len(bytes) < preambleSize {
+	if len(bytes) < nodeHeaderSize {
 		return ErrTooShort
 	}
-	offset := 0
-	offset += 32
-	n.nonce = append([]byte{}, bytes[offset:offset+32]...)
-	offset += 32
-	n.entry = append([]byte{}, bytes[offset:offset+32]...)
-	offset += 32
+	// Verify magic number.
+	if m := binary.BigEndian.Uint32(bytes[0:magicNodeSize]); m != magicNode {
+		return fmt.Errorf("invalid magic number %x", m)
+	}
+	// Verify chunk format version.
+	if v := int(bytes[magicNodeSize : magicNodeSize+nodeFormatVersionSize][0]); v != nodeFormatV1 {
+		return fmt.Errorf("invalid chunk format version %d", v)
+	}
+
+	n.nonce = append([]byte{}, bytes[nodeHeaderSize-nodeNonceSize:nodeHeaderSize]...)
+	n.entry = append([]byte{}, bytes[nodeHeaderSize:nodeHeaderSize+32]...)
+	offset := nodeHeaderSize + 32
 	n.forks = make(map[byte]*fork)
 	bb := &bitsForBytes{}
 	bb.fromBytes(bytes[offset:])
@@ -162,12 +203,19 @@ func (n *Node) UnmarshalBinary(bytes []byte) error {
 
 func (f *fork) fromBytes(b []byte) {
 	f.prefix = bytesToPrefix(b[:32])
-	f.Node = NewNodeRef(b[32:64])
+	refLen := int(uint8(b[32]))
+	f.Node = NewNodeRef(b[33 : 33+refLen])
 }
 
 func (f *fork) bytes() (b []byte, err error) {
-	b = append(b, prefixToBytes(f.prefix)...)
 	r := refBytes(f)
+	// using 1 byte ('nodeForkRefBytesSize') for size
+	if len(r) > 256 {
+		err = fmt.Errorf("node reference size > 256: %d", len(r))
+		return
+	}
+	b = append(b, prefixToBytes(f.prefix)...)
+	b = append(b, uint8(len(r)))
 	b = append(b, r...)
 	return b, nil
 }
