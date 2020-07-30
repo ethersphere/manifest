@@ -116,7 +116,7 @@ func TestRemove(t *testing.T) {
 	}
 }
 
-func TestWalk(t *testing.T) {
+func TestWalkNode(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		toAdd [][]byte
@@ -164,13 +164,85 @@ func TestWalk(t *testing.T) {
 				return nil
 			}
 			// Expect no errors.
-			err := n.Walk([]byte{}, nil, walker)
+			err := n.WalkNode([]byte{}, nil, walker)
 			if err != nil {
 				t.Fatalf("no error expected, found: %s", err)
 			}
 
 			if len(tc.toAdd) != walkedCount {
 				t.Errorf("expected %d nodes, got %d", len(tc.toAdd), walkedCount)
+			}
+
+		})
+	}
+}
+
+func TestWalk(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		toAdd    [][]byte
+		expected [][]byte
+	}{
+		{
+			name: "simple",
+			toAdd: [][]byte{
+				[]byte("index.html"),
+				[]byte("img/test/"),
+				[]byte("img/test/oho.png"),
+				[]byte("img/test/old/test.png"),
+				[]byte("robots.txt"),
+			},
+			expected: [][]byte{
+				[]byte("index.html"),
+				[]byte("img"),
+				[]byte("img/test"),
+				[]byte("img/test/oho.png"),
+				[]byte("img/test/old"),
+				[]byte("img/test/old/test.png"),
+				[]byte("robots.txt"),
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			n := New()
+
+			for i := 0; i < len(tc.toAdd); i++ {
+				c := tc.toAdd[i]
+				err := n.Add(c, c, nil)
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+			}
+
+			walkedCount := 0
+
+			walker := func(path []byte, isDir bool, err error) error {
+				walkedCount++
+
+				pathFound := false
+
+				for i := 0; i < len(tc.expected); i++ {
+					c := tc.expected[i]
+					if bytes.Equal(path, c) {
+						pathFound = true
+						break
+					}
+				}
+
+				if !pathFound {
+					return fmt.Errorf("walkFn returned unknown path: %s", path)
+				}
+
+				return nil
+			}
+			// Expect no errors.
+			err := n.Walk([]byte{}, nil, walker)
+			if err != nil {
+				t.Fatalf("no error expected, found: %s", err)
+			}
+
+			if len(tc.expected) != walkedCount {
+				t.Errorf("expected %d nodes, got %d", len(tc.expected), walkedCount)
 			}
 
 		})
