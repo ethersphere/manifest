@@ -96,6 +96,14 @@ func (n *Node) SetNonce(nonce []byte) {
 	n.nonce = bytes
 }
 
+func (n *Node) Reference() []byte {
+	return n.ref
+}
+
+func (n *Node) Entry() []byte {
+	return n.entry
+}
+
 // LookupNode finds the node for a path or returns error if not found
 func (n *Node) LookupNode(path []byte, l Loader) (*Node, error) {
 	if n.forks == nil {
