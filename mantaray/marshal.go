@@ -235,10 +235,13 @@ func prefixToBytes(prefix []byte) (bytes []byte) {
 }
 
 func bytesToPrefix(bytes []byte) (prefix []byte) {
-	for _, b := range bytes {
-		if b != PathSeparator {
-			prefix = append(prefix, b)
+	prefixEnd := len(bytes) - 1
+
+	for ; prefixEnd > 0; prefixEnd-- {
+		if bytes[prefixEnd] != PathSeparator {
+			break
 		}
 	}
-	return prefix
+
+	return bytes[0 : prefixEnd+1]
 }
