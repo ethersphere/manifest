@@ -7,10 +7,6 @@ import (
 	"fmt"
 )
 
-const (
-	PathSeparator = '/' // path separator
-)
-
 // Node header fields constants.
 const (
 	// magicNode is 4 bytes at the head of a node.
@@ -27,8 +23,16 @@ const (
 )
 
 const (
+	nodeForkPrefixBytesSize  = 1
+	nodeForkHeaderSize       = nodeForkPrefixBytesSize + nodeForkRefBytesSize // 2
+	nodeForkPreReferenceSize = 32
+	nodePrefixMaxSize        = nodeForkPreReferenceSize - nodeForkHeaderSize // 30
+	nodeReferenceMaxSize     = 32
+)
+
+const (
 	preambleSize = 64
-	forkSize     = 64 + nodeForkRefBytesSize
+	forkSize     = 64
 )
 
 var (
@@ -202,9 +206,11 @@ func (n *Node) UnmarshalBinary(bytes []byte) error {
 }
 
 func (f *fork) fromBytes(b []byte) {
-	f.prefix = bytesToPrefix(b[:32])
-	refLen := int(uint8(b[32]))
-	f.Node = NewNodeRef(b[33 : 33+refLen])
+	prefixLen := int(uint8(b[0]))
+	refLen := int(uint8(b[1]))
+
+	f.prefix = b[nodeForkHeaderSize : nodeForkHeaderSize+prefixLen]
+	f.Node = NewNodeRef(b[nodeForkPreReferenceSize : nodeForkPreReferenceSize+refLen])
 }
 
 func (f *fork) bytes() (b []byte, err error) {
@@ -214,9 +220,17 @@ func (f *fork) bytes() (b []byte, err error) {
 		err = fmt.Errorf("node reference size > 256: %d", len(r))
 		return
 	}
-	b = append(b, prefixToBytes(f.prefix)...)
+	b = append(b, uint8(len(f.prefix)))
 	b = append(b, uint8(len(r)))
-	b = append(b, r...)
+
+	prefixBytes := make([]byte, nodePrefixMaxSize)
+	copy(prefixBytes, f.prefix)
+	b = append(b, prefixBytes...)
+
+	refBytes := make([]byte, nodeReferenceMaxSize)
+	copy(refBytes, r)
+	b = append(b, refBytes...)
+
 	return b, nil
 }
 
@@ -224,24 +238,4 @@ var refBytes = nodeRefBytes
 
 func nodeRefBytes(f *fork) []byte {
 	return f.Node.ref
-}
-
-func prefixToBytes(prefix []byte) (bytes []byte) {
-	bytes = append(bytes, prefix...)
-	for i := len(prefix); i < 32; i++ {
-		bytes = append(bytes, PathSeparator)
-	}
-	return bytes
-}
-
-func bytesToPrefix(bytes []byte) (prefix []byte) {
-	prefixEnd := len(bytes) - 1
-
-	for ; prefixEnd > 0; prefixEnd-- {
-		if bytes[prefixEnd] != PathSeparator {
-			break
-		}
-	}
-
-	return bytes[0 : prefixEnd+1]
 }

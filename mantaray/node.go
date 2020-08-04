@@ -8,6 +8,10 @@ import (
 	"strconv"
 )
 
+const (
+	PathSeparator = '/' // path separator
+)
+
 // Error used when lookup path does not match
 var (
 	ErrNotFound  = errors.New("not found")
@@ -147,9 +151,9 @@ func (n *Node) Add(path []byte, entry []byte, ls LoadSaver) error {
 	if f == nil {
 		nn := New()
 		// check for prefix size limit
-		if len(path) > 32 {
-			prefix := path[:32]
-			rest := path[32:]
+		if len(path) > nodePrefixMaxSize {
+			prefix := path[:nodePrefixMaxSize]
+			rest := path[nodePrefixMaxSize:]
 			err := nn.Add(rest, entry, ls)
 			if err != nil {
 				return err
