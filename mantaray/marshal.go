@@ -23,8 +23,9 @@ const (
 )
 
 const (
+	nodeForkTypeBytesSize    = 1
 	nodeForkPrefixBytesSize  = 1
-	nodeForkHeaderSize       = nodeForkPrefixBytesSize + nodeForkRefBytesSize // 2
+	nodeForkHeaderSize       = nodeForkTypeBytesSize + nodeForkPrefixBytesSize // 2
 	nodeForkPreReferenceSize = 32
 	nodePrefixMaxSize        = nodeForkPreReferenceSize - nodeForkHeaderSize // 30
 	nodeReferenceMaxSize     = 32
@@ -106,19 +107,6 @@ func (n *Node) MarshalBinary() (bytes []byte, err error) {
 		return nil, err
 	}
 
-	// add info about fork node type
-	// NOTE: variable size
-	nodeTypesBytes := []byte{}
-	err = index.iter(func(b byte) error {
-		nt := n.forks[b].nodeType
-		nodeTypesBytes = append(nodeTypesBytes, byte(nt))
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	bytes = append(bytes, nodeTypesBytes...)
-
 	return bytes, nil
 }
 
@@ -190,27 +178,16 @@ func (n *Node) UnmarshalBinary(bytes []byte) error {
 		return nil
 	})
 
-	// read info about fork node type
-	// process fork node types sequentally
-	// NOTE: this MUST come after reading forks
-	err := bb.iter(func(b byte) error {
-		n.forks[b].nodeType = uint8(bytes[offset])
-		offset++
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
 func (f *fork) fromBytes(b []byte) {
-	prefixLen := int(uint8(b[0]))
-	refLen := int(uint8(b[1]))
+	nodeType := uint8(b[0])
+	prefixLen := int(uint8(b[1]))
 
 	f.prefix = b[nodeForkHeaderSize : nodeForkHeaderSize+prefixLen]
-	f.Node = NewNodeRef(b[nodeForkPreReferenceSize : nodeForkPreReferenceSize+refLen])
+	f.Node = NewNodeRef(b[nodeForkPreReferenceSize:])
+	f.Node.nodeType = nodeType
 }
 
 func (f *fork) bytes() (b []byte, err error) {
@@ -220,8 +197,8 @@ func (f *fork) bytes() (b []byte, err error) {
 		err = fmt.Errorf("node reference size > 256: %d", len(r))
 		return
 	}
+	b = append(b, f.Node.nodeType)
 	b = append(b, uint8(len(f.prefix)))
-	b = append(b, uint8(len(r)))
 
 	prefixBytes := make([]byte, nodePrefixMaxSize)
 	copy(prefixBytes, f.prefix)
