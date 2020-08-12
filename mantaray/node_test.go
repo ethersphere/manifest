@@ -34,7 +34,8 @@ func TestAddAndLookup(t *testing.T) {
 	}
 	for i := 0; i < len(testCases); i++ {
 		c := testCases[i]
-		err := n.Add(c, c, nil)
+		e := append(make([]byte, 32-len(c)), c...)
+		err := n.Add(c, e, nil)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
@@ -44,7 +45,8 @@ func TestAddAndLookup(t *testing.T) {
 			if err != nil {
 				t.Fatalf("expected no error, got %v", err)
 			}
-			if !bytes.Equal(m, d) {
+			de := append(make([]byte, 32-len(d)), d...)
+			if !bytes.Equal(m, de) {
 				t.Fatalf("expected value %x, got %x", d, m)
 			}
 		}
@@ -88,7 +90,8 @@ func TestRemove(t *testing.T) {
 
 			for i := 0; i < len(tc.toAdd); i++ {
 				c := tc.toAdd[i]
-				err := n.Add(c, c, nil)
+				e := append(make([]byte, 32-len(c)), c...)
+				err := n.Add(c, e, nil)
 				if err != nil {
 					t.Fatalf("expected no error, got %v", err)
 				}
@@ -98,7 +101,8 @@ func TestRemove(t *testing.T) {
 					if err != nil {
 						t.Fatalf("expected no error, got %v", err)
 					}
-					if !bytes.Equal(m, d) {
+					de := append(make([]byte, 32-len(d)), d...)
+					if !bytes.Equal(m, de) {
 						t.Fatalf("expected value %x, got %x", d, m)
 					}
 				}
@@ -140,7 +144,8 @@ func TestWalkNode(t *testing.T) {
 
 			for i := 0; i < len(tc.toAdd); i++ {
 				c := tc.toAdd[i]
-				err := n.Add(c, c, nil)
+				e := append(make([]byte, 32-len(c)), c...)
+				err := n.Add(c, e, nil)
 				if err != nil {
 					t.Fatalf("expected no error, got %v", err)
 				}
@@ -212,7 +217,8 @@ func TestWalk(t *testing.T) {
 
 			for i := 0; i < len(tc.toAdd); i++ {
 				c := tc.toAdd[i]
-				err := n.Add(c, c, nil)
+				e := append(make([]byte, 32-len(c)), c...)
+				err := n.Add(c, e, nil)
 				if err != nil {
 					t.Fatalf("expected no error, got %v", err)
 				}

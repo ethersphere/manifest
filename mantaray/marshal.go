@@ -5,40 +5,56 @@
 package mantaray
 
 import (
+	"bytes"
 	"crypto/rand"
-	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 )
 
-// Node header fields constants.
+// Version constants.
 const (
-	// magicNode is 4 bytes at the head of a node.
-	magicNode = 0x2D833CCB
-	// magicNodeSize is the size in bytes of magicNode.
-	magicNodeSize          = 4
-	nodeFormatV1           = 1
-	nodeFormatVersionSize  = 1
-	nodeForkRefBytesSize   = 1
-	nodeHeaderPaddingSize  = 26 // configured to make header size 64
-	nodeObfuscationKeySize = 32
-	// nodeHeaderSize defines the total size of the header part.
-	nodeHeaderSize = magicNodeSize + nodeFormatVersionSize + nodeForkRefBytesSize + nodeHeaderPaddingSize + nodeObfuscationKeySize
+	versionNameString   = "mantaray"
+	versionCode01String = "0.1"
+
+	versionSeparatorString = ":"
+
+	version01String     = versionNameString + versionSeparatorString + versionCode01String   // "mantaray:0.1"
+	version01HashString = "025184789d63635766d78c41900196b57d7400875ebe4d9b5d1e76bd9652a9b7" // pre-calculated version string, Keccak-256
 )
 
+// Node header fields constants.
+const (
+	nodeObfuscationKeySize = 32
+	versionHashSize        = 31
+	nodeRefBytesSize       = 1
+
+	// nodeHeaderSize defines the total size of the header part
+	nodeHeaderSize = nodeObfuscationKeySize + versionHashSize + nodeRefBytesSize
+)
+
+// Node fork constats.
 const (
 	nodeForkTypeBytesSize    = 1
 	nodeForkPrefixBytesSize  = 1
 	nodeForkHeaderSize       = nodeForkTypeBytesSize + nodeForkPrefixBytesSize // 2
 	nodeForkPreReferenceSize = 32
 	nodePrefixMaxSize        = nodeForkPreReferenceSize - nodeForkHeaderSize // 30
-	nodeReferenceMaxSize     = 32
 )
 
-const (
-	preambleSize = 64
-	forkSize     = 64
+var (
+	version01HashBytes []byte
 )
+
+func init() {
+	b, err := hex.DecodeString(version01HashString)
+	if err != nil {
+		panic(err)
+	}
+
+	version01HashBytes = make([]byte, versionHashSize)
+	copy(version01HashBytes, b)
+}
 
 var (
 	// ErrTooShort too short input
@@ -63,10 +79,6 @@ func (n *Node) MarshalBinary() (bytes []byte, err error) {
 
 	headerBytes := make([]byte, nodeHeaderSize)
 
-	binary.BigEndian.PutUint32(headerBytes[:magicNodeSize], magicNode)
-	headerBytes[4] = nodeFormatV1
-	headerBytes[5] = nodeForkRefBytesSize
-
 	if len(n.obfuscationKey) == 0 {
 		// generate obfuscation key
 		obfuscationKey := make([]byte, nodeObfuscationKeySize)
@@ -76,13 +88,17 @@ func (n *Node) MarshalBinary() (bytes []byte, err error) {
 		}
 		n.obfuscationKey = obfuscationKey
 	}
-	copy(headerBytes[nodeHeaderSize-nodeObfuscationKeySize:nodeHeaderSize], n.obfuscationKey)
+	copy(headerBytes[0:nodeObfuscationKeySize], n.obfuscationKey)
+
+	copy(headerBytes[nodeObfuscationKeySize:nodeObfuscationKeySize+versionHashSize], version01HashBytes)
+
+	headerBytes[nodeObfuscationKeySize+versionHashSize] = uint8(n.refBytesSize)
 
 	bytes = append(bytes, headerBytes...)
 
 	// entry
 
-	entryBytes := make([]byte, 32)
+	entryBytes := make([]byte, n.refBytesSize)
 	copy(entryBytes, n.entry)
 	bytes = append(bytes, entryBytes...)
 
@@ -155,33 +171,31 @@ func (bb *bitsForBytes) iter(f func(byte) error) error {
 }
 
 // UnmarshalBinary deserialises a node
-func (n *Node) UnmarshalBinary(bytes []byte) error {
-	if len(bytes) < nodeHeaderSize {
+func (n *Node) UnmarshalBinary(ba []byte) error {
+	if len(ba) < nodeHeaderSize {
 		return ErrTooShort
 	}
-	// Verify magic number.
-	if m := binary.BigEndian.Uint32(bytes[0:magicNodeSize]); m != magicNode {
-		return fmt.Errorf("invalid magic number %x", m)
-	}
-	// Verify chunk format version.
-	if v := int(bytes[magicNodeSize : magicNodeSize+nodeFormatVersionSize][0]); v != nodeFormatV1 {
-		return fmt.Errorf("invalid chunk format version %d", v)
+
+	n.obfuscationKey = append([]byte{}, ba[0:nodeObfuscationKeySize]...)
+
+	// Verify version hash.
+	if versionHash := append([]byte{}, ba[nodeObfuscationKeySize:nodeObfuscationKeySize+versionHashSize]...); !bytes.Equal(versionHash, version01HashBytes) {
+		return fmt.Errorf("invalid version hash %x", versionHash)
 	}
 
-	// refLen := int(bytes[magicNodeSize+nodeFormatVersionSize+1])
+	refBytesSize := int(ba[nodeHeaderSize-1])
 
-	n.obfuscationKey = append([]byte{}, bytes[nodeHeaderSize-nodeObfuscationKeySize:nodeHeaderSize]...)
-	n.entry = append([]byte{}, bytes[nodeHeaderSize:nodeHeaderSize+32]...)
-	offset := nodeHeaderSize + 32
+	n.entry = append([]byte{}, ba[nodeHeaderSize:nodeHeaderSize+refBytesSize]...)
+	offset := nodeHeaderSize + refBytesSize // skip entry
 	n.forks = make(map[byte]*fork)
 	bb := &bitsForBytes{}
-	bb.fromBytes(bytes[offset:])
-	offset += 32
+	bb.fromBytes(ba[offset:])
+	offset += 32 // skip forks
 	return bb.iter(func(b byte) error {
 		f := &fork{}
-		f.fromBytes(bytes[offset : offset+forkSize])
+		f.fromBytes(ba[offset : offset+nodeForkPreReferenceSize+refBytesSize])
 		n.forks[b] = f
-		offset += forkSize
+		offset += nodeForkPreReferenceSize + refBytesSize
 		return nil
 	})
 }
@@ -197,7 +211,7 @@ func (f *fork) fromBytes(b []byte) {
 
 func (f *fork) bytes() (b []byte, err error) {
 	r := refBytes(f)
-	// using 1 byte ('nodeForkRefBytesSize') for size
+	// using 1 byte ('f.Node.refBytesSize') for size
 	if len(r) > 256 {
 		err = fmt.Errorf("node reference size > 256: %d", len(r))
 		return
@@ -209,7 +223,7 @@ func (f *fork) bytes() (b []byte, err error) {
 	copy(prefixBytes, f.prefix)
 	b = append(b, prefixBytes...)
 
-	refBytes := make([]byte, nodeReferenceMaxSize)
+	refBytes := make([]byte, len(r))
 	copy(refBytes, r)
 	b = append(b, refBytes...)
 
