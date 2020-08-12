@@ -127,7 +127,22 @@ func (n *Node) MarshalBinary() (bytes []byte, err error) {
 		return nil, err
 	}
 
-	return bytes, nil
+	// perform XOR encryption on bytes after obfuscation key
+	xorEncryptedBytes := make([]byte, len(bytes))
+
+	copy(xorEncryptedBytes, bytes[0:nodeObfuscationKeySize])
+
+	for i := nodeObfuscationKeySize; i < len(bytes); i += nodeObfuscationKeySize {
+		end := i + nodeObfuscationKeySize
+		if end > len(bytes) {
+			end = len(bytes)
+		}
+
+		encrypted := encryptDecrypt(bytes[i:end], n.obfuscationKey)
+		copy(xorEncryptedBytes[i:end], encrypted)
+	}
+
+	return xorEncryptedBytes, nil
 }
 
 // bitsForBytes is a set of bytes represented as a 256-length bitvector
@@ -177,6 +192,23 @@ func (n *Node) UnmarshalBinary(ba []byte) error {
 	}
 
 	n.obfuscationKey = append([]byte{}, ba[0:nodeObfuscationKeySize]...)
+
+	// perform XOR decryption on bytes after obfuscation key
+	xorDecryptedBytes := make([]byte, len(ba))
+
+	copy(xorDecryptedBytes, ba[0:nodeObfuscationKeySize])
+
+	for i := nodeObfuscationKeySize; i < len(ba); i += nodeObfuscationKeySize {
+		end := i + nodeObfuscationKeySize
+		if end > len(ba) {
+			end = len(ba)
+		}
+
+		decrypted := encryptDecrypt(ba[i:end], n.obfuscationKey)
+		copy(xorDecryptedBytes[i:end], decrypted)
+	}
+
+	ba = xorDecryptedBytes
 
 	// Verify version hash.
 	if versionHash := append([]byte{}, ba[nodeObfuscationKeySize:nodeObfuscationKeySize+versionHashSize]...); !bytes.Equal(versionHash, version01HashBytes) {
@@ -234,4 +266,16 @@ var refBytes = nodeRefBytes
 
 func nodeRefBytes(f *fork) []byte {
 	return f.Node.ref
+}
+
+// encryptDecrypt runs a XOR encryption on the input bytes, encrypting it if it
+// hasn't already been, and decrypting it if it has, using the key provided.
+func encryptDecrypt(input, key []byte) []byte {
+	output := make([]byte, len(input))
+
+	for i := 0; i < len(input); i++ {
+		output[i] = input[i] ^ key[i%len(key)]
+	}
+
+	return output
 }
