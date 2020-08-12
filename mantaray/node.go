@@ -24,11 +24,11 @@ var (
 
 // Node represents a mantaray Node
 type Node struct {
-	nodeType uint8
-	nonce    []byte
-	ref      []byte // reference to uninstantiated Node persisted serialised
-	entry    []byte
-	forks    map[byte]*fork
+	nodeType       uint8
+	obfuscationKey []byte
+	ref            []byte // reference to uninstantiated Node persisted serialised
+	entry          []byte
+	forks          map[byte]*fork
 }
 
 type fork struct {
@@ -94,10 +94,10 @@ func (n *Node) makeNotWithPathSeparator() {
 	n.nodeType = (nodeTypeMask ^ nodeTypeWithPathSeparator) & n.nodeType
 }
 
-func (n *Node) SetNonce(nonce []byte) {
+func (n *Node) SetObfuscationKey(obfuscationKey []byte) {
 	bytes := make([]byte, 32)
-	copy(bytes, nonce)
-	n.nonce = bytes
+	copy(bytes, obfuscationKey)
+	n.obfuscationKey = bytes
 }
 
 func (n *Node) Reference() []byte {
