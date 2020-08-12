@@ -17,7 +17,7 @@ var testPrefixes = [][]byte{
 }
 
 func init() {
-	nonceFn = func(p []byte) (n int, err error) {
+	obfuscationKeyFn = func(p []byte) (n int, err error) {
 		return mrand.Read(p)
 	}
 }

@@ -12,14 +12,14 @@ const (
 	// magicNode is 4 bytes at the head of a node.
 	magicNode = 0x2D833CCB
 	// magicNodeSize is the size in bytes of magicNode.
-	magicNodeSize         = 4
-	nodeFormatV1          = 1
-	nodeFormatVersionSize = 1
-	nodeForkRefBytesSize  = 1
-	nodeHeaderPaddingSize = 26 // configured to make header size 64
-	nodeNonceSize         = 32
+	magicNodeSize          = 4
+	nodeFormatV1           = 1
+	nodeFormatVersionSize  = 1
+	nodeForkRefBytesSize   = 1
+	nodeHeaderPaddingSize  = 26 // configured to make header size 64
+	nodeObfuscationKeySize = 32
 	// nodeHeaderSize defines the total size of the header part.
-	nodeHeaderSize = magicNodeSize + nodeFormatVersionSize + nodeForkRefBytesSize + nodeHeaderPaddingSize + nodeNonceSize
+	nodeHeaderSize = magicNodeSize + nodeFormatVersionSize + nodeForkRefBytesSize + nodeHeaderPaddingSize + nodeObfuscationKeySize
 )
 
 const (
@@ -45,7 +45,7 @@ var (
 	ErrForkIvalid = errors.New("fork node without reference")
 )
 
-var nonceFn = func(p []byte) (n int, err error) {
+var obfuscationKeyFn = func(p []byte) (n int, err error) {
 	return rand.Read(p)
 }
 
@@ -63,16 +63,16 @@ func (n *Node) MarshalBinary() (bytes []byte, err error) {
 	headerBytes[4] = nodeFormatV1
 	headerBytes[5] = nodeForkRefBytesSize
 
-	if len(n.nonce) == 0 {
-		// generate nonce
-		nonce := make([]byte, nodeNonceSize)
-		for i := 0; i < nodeNonceSize; {
-			read, _ := nonceFn(nonce[i:])
+	if len(n.obfuscationKey) == 0 {
+		// generate obfuscation key
+		obfuscationKey := make([]byte, nodeObfuscationKeySize)
+		for i := 0; i < nodeObfuscationKeySize; {
+			read, _ := obfuscationKeyFn(obfuscationKey[i:])
 			i += read
 		}
-		n.nonce = nonce
+		n.obfuscationKey = obfuscationKey
 	}
-	copy(headerBytes[nodeHeaderSize-nodeNonceSize:nodeHeaderSize], n.nonce)
+	copy(headerBytes[nodeHeaderSize-nodeObfuscationKeySize:nodeHeaderSize], n.obfuscationKey)
 
 	bytes = append(bytes, headerBytes...)
 
@@ -163,7 +163,9 @@ func (n *Node) UnmarshalBinary(bytes []byte) error {
 		return fmt.Errorf("invalid chunk format version %d", v)
 	}
 
-	n.nonce = append([]byte{}, bytes[nodeHeaderSize-nodeNonceSize:nodeHeaderSize]...)
+	// refLen := int(bytes[magicNodeSize+nodeFormatVersionSize+1])
+
+	n.obfuscationKey = append([]byte{}, bytes[nodeHeaderSize-nodeObfuscationKeySize:nodeHeaderSize]...)
 	n.entry = append([]byte{}, bytes[nodeHeaderSize:nodeHeaderSize+32]...)
 	offset := nodeHeaderSize + 32
 	n.forks = make(map[byte]*fork)

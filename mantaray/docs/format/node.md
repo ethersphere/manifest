@@ -12,7 +12,7 @@ The following describes the format of a node binary format.
 ├──────────────────────────────┤
 │     padding <26 byte>        │
 ├──────────────────────────────┤
-│       nonce <32 byte>        │
+│   obfuscationKey <32 byte>   │
 ├──────────────────────────────┤
 │      entry <32/64 byte>      │
 ├──────────────────────────────┤
