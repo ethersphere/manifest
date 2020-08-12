@@ -21,6 +21,7 @@ var (
 // Node represents a mantaray Node
 type Node struct {
 	nodeType       uint8
+	refBytesSize   int
 	obfuscationKey []byte
 	ref            []byte // reference to uninstantiated Node persisted serialised
 	entry          []byte
@@ -136,6 +137,17 @@ func (n *Node) Lookup(path []byte, l Loader) ([]byte, error) {
 
 // Add adds an entry to the path
 func (n *Node) Add(path []byte, entry []byte, ls LoadSaver) error {
+	if n.refBytesSize == 0 {
+		if len(entry) > 256 {
+			return fmt.Errorf("node entry size > 256: %d", len(entry))
+		}
+		n.refBytesSize = len(entry)
+	} else {
+		if n.refBytesSize != len(entry) {
+			return fmt.Errorf("invalid entry size: %d, expected: %d", len(entry), n.refBytesSize)
+		}
+	}
+
 	if len(path) == 0 {
 		n.entry = entry
 		n.ref = nil
@@ -150,6 +162,7 @@ func (n *Node) Add(path []byte, entry []byte, ls LoadSaver) error {
 	f := n.forks[path[0]]
 	if f == nil {
 		nn := New()
+		nn.refBytesSize = n.refBytesSize
 		// check for prefix size limit
 		if len(path) > nodePrefixMaxSize {
 			prefix := path[:nodePrefixMaxSize]
@@ -176,6 +189,7 @@ func (n *Node) Add(path []byte, entry []byte, ls LoadSaver) error {
 	if len(rest) > 0 {
 		// move current common prefix node
 		nn = New()
+		nn.refBytesSize = n.refBytesSize
 		f.Node.updateIsWithPathSeparator(rest)
 		nn.forks[rest[0]] = &fork{rest, f.Node}
 		nn.makeEdge()
