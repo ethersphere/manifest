@@ -186,52 +186,52 @@ func (bb *bitsForBytes) iter(f func(byte) error) error {
 }
 
 // UnmarshalBinary deserialises a node
-func (n *Node) UnmarshalBinary(ba []byte) error {
-	if len(ba) < nodeHeaderSize {
+func (n *Node) UnmarshalBinary(data []byte) error {
+	if len(data) < nodeHeaderSize {
 		return ErrTooShort
 	}
 
-	n.obfuscationKey = append([]byte{}, ba[0:nodeObfuscationKeySize]...)
+	n.obfuscationKey = append([]byte{}, data[0:nodeObfuscationKeySize]...)
 
 	// perform XOR decryption on bytes after obfuscation key
-	xorDecryptedBytes := make([]byte, len(ba))
+	xorDecryptedBytes := make([]byte, len(data))
 
-	copy(xorDecryptedBytes, ba[0:nodeObfuscationKeySize])
+	copy(xorDecryptedBytes, data[0:nodeObfuscationKeySize])
 
-	for i := nodeObfuscationKeySize; i < len(ba); i += nodeObfuscationKeySize {
+	for i := nodeObfuscationKeySize; i < len(data); i += nodeObfuscationKeySize {
 		end := i + nodeObfuscationKeySize
-		if end > len(ba) {
-			end = len(ba)
+		if end > len(data) {
+			end = len(data)
 		}
 
-		decrypted := encryptDecrypt(ba[i:end], n.obfuscationKey)
+		decrypted := encryptDecrypt(data[i:end], n.obfuscationKey)
 		copy(xorDecryptedBytes[i:end], decrypted)
 	}
 
-	ba = xorDecryptedBytes
+	data = xorDecryptedBytes
 
 	// Verify version hash.
-	if versionHash := append([]byte{}, ba[nodeObfuscationKeySize:nodeObfuscationKeySize+versionHashSize]...); !bytes.Equal(versionHash, version01HashBytes) {
+	if versionHash := append([]byte{}, data[nodeObfuscationKeySize:nodeObfuscationKeySize+versionHashSize]...); !bytes.Equal(versionHash, version01HashBytes) {
 		return fmt.Errorf("invalid version hash %x", versionHash)
 	}
 
-	refBytesSize := int(ba[nodeHeaderSize-1])
+	refBytesSize := int(data[nodeHeaderSize-1])
 
-	n.entry = append([]byte{}, ba[nodeHeaderSize:nodeHeaderSize+refBytesSize]...)
+	n.entry = append([]byte{}, data[nodeHeaderSize:nodeHeaderSize+refBytesSize]...)
 	offset := nodeHeaderSize + refBytesSize // skip entry
 	n.forks = make(map[byte]*fork)
 	bb := &bitsForBytes{}
-	bb.fromBytes(ba[offset:])
+	bb.fromBytes(data[offset:])
 	offset += 32 // skip forks
 	return bb.iter(func(b byte) error {
 		f := &fork{}
 
-		if len(ba) < offset+nodeForkPreReferenceSize+refBytesSize {
-			err := fmt.Errorf("not enough bytes for node fork: %d (%d)", (len(ba) - offset), (nodeForkPreReferenceSize + refBytesSize))
+		if len(data) < offset+nodeForkPreReferenceSize+refBytesSize {
+			err := fmt.Errorf("not enough bytes for node fork: %d (%d)", (len(data) - offset), (nodeForkPreReferenceSize + refBytesSize))
 			return fmt.Errorf("%w on byte '%x'", err, []byte{b})
 		}
 
-		err := f.fromBytes(ba[offset : offset+nodeForkPreReferenceSize+refBytesSize])
+		err := f.fromBytes(data[offset : offset+nodeForkPreReferenceSize+refBytesSize])
 		if err != nil {
 			return fmt.Errorf("%w on byte '%x'", err, []byte{b})
 		}
