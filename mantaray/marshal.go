@@ -218,24 +218,43 @@ func (n *Node) UnmarshalBinary(ba []byte) error {
 	bb := &bitsForBytes{}
 	bb.fromBytes(ba[offset:])
 	offset += 32 // skip forks
-	bb.iter(func(b byte) error {
+	err := bb.iter(func(b byte) error {
 		f := &fork{}
-		f.fromBytes(ba[offset : offset+nodeForkPreReferenceSize+refBytesSize])
+
+		if len(ba) < offset+nodeForkPreReferenceSize+refBytesSize {
+			err := fmt.Errorf("not enough bytes for node fork: %d (%d)", (len(ba) - offset), (nodeForkPreReferenceSize + refBytesSize))
+			return fmt.Errorf("%w on byte '%x'", err, []byte{b})
+		}
+
+		err := f.fromBytes(ba[offset : offset+nodeForkPreReferenceSize+refBytesSize])
+		if err != nil {
+			return fmt.Errorf("%w on byte '%x'", err, []byte{b})
+		}
+
 		n.forks[b] = f
 		offset += nodeForkPreReferenceSize + refBytesSize
 		return nil
 	})
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
-func (f *fork) fromBytes(b []byte) {
+func (f *fork) fromBytes(b []byte) error {
 	nodeType := uint8(b[0])
 	prefixLen := int(uint8(b[1]))
+
+	if prefixLen == 0 || prefixLen > nodePrefixMaxSize {
+		return fmt.Errorf("invalid prefix length: %d", prefixLen)
+	}
 
 	f.prefix = b[nodeForkHeaderSize : nodeForkHeaderSize+prefixLen]
 	f.Node = NewNodeRef(b[nodeForkPreReferenceSize:])
 	f.Node.nodeType = nodeType
+
+	return nil
 }
 
 func (f *fork) bytes() (b []byte, err error) {
