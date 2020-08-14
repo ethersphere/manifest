@@ -79,10 +79,12 @@ func (n *Node) makeWithPathSeparator() {
 	n.nodeType = n.nodeType | nodeTypeWithPathSeparator
 }
 
+//nolint,unused
 func (n *Node) makeNotValue() {
 	n.nodeType = (nodeTypeMask ^ nodeTypeValue) & n.nodeType
 }
 
+//nolint,unused
 func (n *Node) makeNotEdge() {
 	n.nodeType = (nodeTypeMask ^ nodeTypeEdge) & n.nodeType
 }
@@ -364,6 +366,7 @@ func (n *Node) Walk(root []byte, l Loader, walkFn WalkFunc) error {
 	return err
 }
 
+//nolint,errcheck
 func (n *Node) String() string {
 	buf := bytes.NewBuffer(nil)
 	io.WriteString(buf, tableCharsMap["bottom-left"])
@@ -374,6 +377,7 @@ func (n *Node) String() string {
 	return buf.String()
 }
 
+//nolint,errcheck
 func nodeStringWithPrefix(n *Node, prefix string, writer io.Writer) {
 	io.WriteString(writer, prefix)
 	io.WriteString(writer, tableCharsMap["left-mid"])

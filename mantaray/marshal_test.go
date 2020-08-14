@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	mrand "math/rand"
 	"testing"
+
+	"golang.org/x/crypto/sha3"
 )
 
 const testMarshalOutput = "52fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c64950ac787fbce1061870e8d34e0a638bc7e812c7ca4ebd31d626a572ba47b06f6952fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c64952fdfc072182654f163f5f0fa0621d729566c74d10037c4d7bbb0407d1e2c64950f89d6640e3044f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c64952fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c64950ff9f642182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c64952fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c64850fc98072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c64952fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c64b50ff99622182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c64952fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c64a"
@@ -19,6 +21,22 @@ var testPrefixes = [][]byte{
 func init() {
 	obfuscationKeyFn = func(p []byte) (n int, err error) {
 		return mrand.Read(p)
+	}
+}
+
+func TestVersion01(t *testing.T) {
+	hasher := sha3.NewLegacyKeccak256()
+
+	_, err := hasher.Write([]byte(version01String))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := hasher.Sum(nil)
+
+	sumHex := hex.EncodeToString(sum)
+
+	if version01HashString != sumHex {
+		t.Fatalf("expecting version hash '%s', got '%s'", version01String, sumHex)
 	}
 }
 

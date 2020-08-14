@@ -159,6 +159,7 @@ func (bb *bitsForBytes) set(b byte) {
 	bb.bits[uint8(b)/8] |= 1 << (uint8(b) % 8)
 }
 
+//nolint,unused
 func (bb *bitsForBytes) get(b byte) bool {
 	return bb.getUint8(uint8(b))
 }
