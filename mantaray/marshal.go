@@ -64,6 +64,7 @@ func (bb *bitsForBytes) set(b byte) {
 	bb.bits[uint8(b)/8] |= 1 << (uint8(b) % 8)
 }
 
+//nolint,unused
 func (bb *bitsForBytes) get(b byte) bool {
 	return bb.getUint8(uint8(b))
 }
@@ -95,14 +96,13 @@ func (n *Node) UnmarshalBinary(bytes []byte) error {
 	offset := preambleSize
 	bb := &bitsForBytes{}
 	bb.fromBytes(bytes[32:])
-	bb.iter(func(b byte) error {
+	return bb.iter(func(b byte) error {
 		f := &fork{}
 		f.fromBytes(bytes[offset : offset+forkSize])
 		n.forks[b] = f
 		offset += forkSize
 		return nil
 	})
-	return nil
 }
 
 func (f *fork) fromBytes(b []byte) {
@@ -130,6 +130,7 @@ func prefixToBytes(prefix []byte) (bytes []byte) {
 	}
 	return bytes
 }
+
 func bytesToPrefix(bytes []byte) (prefix []byte) {
 	for _, b := range bytes {
 		if b != '/' {

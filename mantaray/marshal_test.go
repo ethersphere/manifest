@@ -39,6 +39,7 @@ func TestUnmarshal(t *testing.T) {
 		}
 	}
 }
+
 func TestMarshal(t *testing.T) {
 	n := New()
 	defer func(r func(*fork) []byte) { refBytes = r }(refBytes)
@@ -51,7 +52,10 @@ func TestMarshal(t *testing.T) {
 	}
 	for i := 0; i < len(testPrefixes); i++ {
 		c := testPrefixes[i]
-		n.Add(c, c, nil)
+		err := n.Add(c, c, nil)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
 	}
 	b, err := n.MarshalBinary()
 	if err != nil {
