@@ -5,6 +5,7 @@
 package simple
 
 import (
+	"encoding"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,18 +18,34 @@ var (
 	ErrEmptyPath = errors.New("empty path")
 )
 
-// Manifest is a JSON representation of a manifest.
+// Manifest is a representation of a manifest.
+type Manifest interface {
+	// Add adds a manifest entry to the specified path.
+	Add(string, string) error
+	// Remove removes a manifest entry on the specified path.
+	Remove(string) error
+	// Lookup returns a manifest node entry if one is found in the specified path.
+	Lookup(string) (Entry, error)
+	// Length returns an implementation-specific count of elements in the manifest.
+	// For Manifest, this means the number of all the existing entries.
+	Length() int
+
+	encoding.BinaryMarshaler
+	encoding.BinaryUnmarshaler
+}
+
+// manifest is a JSON representation of a manifest.
 // It stores manifest entries in a map based on string keys.
-type Manifest struct {
-	Entries map[string]*Entry `json:"entries,omitempty"`
+type manifest struct {
+	Entries map[string]*entry `json:"entries,omitempty"`
 
 	mu sync.RWMutex // mutex for accessing the entries map
 }
 
 // NewManifest creates a new Manifest struct and returns a pointer to it.
-func NewManifest() *Manifest {
-	return &Manifest{
-		Entries: make(map[string]*Entry),
+func NewManifest() Manifest {
+	return &manifest{
+		Entries: make(map[string]*entry),
 	}
 }
 
@@ -36,8 +53,7 @@ func notFound(path string) error {
 	return fmt.Errorf("entry on '%s': %w", path, ErrNotFound)
 }
 
-// Add adds a manifest entry to the specified path.
-func (m *Manifest) Add(path string, entry string) error {
+func (m *manifest) Add(path string, entry string) error {
 	if len(path) == 0 {
 		return ErrEmptyPath
 	}
@@ -45,13 +61,12 @@ func (m *Manifest) Add(path string, entry string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.Entries[path] = NewEntry(entry)
+	m.Entries[path] = newEntry(entry)
 
 	return nil
 }
 
-// Remove removes a manifest entry on the specified path.
-func (m *Manifest) Remove(path string) error {
+func (m *manifest) Remove(path string) error {
 	if len(path) == 0 {
 		return ErrEmptyPath
 	}
@@ -64,8 +79,7 @@ func (m *Manifest) Remove(path string) error {
 	return nil
 }
 
-// Lookup returns a manifest node entry if one is found in the specified path.
-func (m *Manifest) Lookup(path string) (*Entry, error) {
+func (m *manifest) Lookup(path string) (Entry, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -75,12 +89,10 @@ func (m *Manifest) Lookup(path string) (*Entry, error) {
 	}
 
 	// return a copy to prevent external modification
-	return NewEntry(entry.Reference()), nil
+	return newEntry(entry.Reference()), nil
 }
 
-// Length returns an implementation-specific count of elements in the manifest.
-// For Manifest, this means the number of all the existing entries.
-func (m *Manifest) Length() int {
+func (m *manifest) Length() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -88,7 +100,7 @@ func (m *Manifest) Length() int {
 }
 
 // MarshalBinary implements encoding.BinaryMarshaler.
-func (m *Manifest) MarshalBinary() ([]byte, error) {
+func (m *manifest) MarshalBinary() ([]byte, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -96,7 +108,7 @@ func (m *Manifest) MarshalBinary() ([]byte, error) {
 }
 
 // UnmarshalBinary implements encoding.BinaryUnmarshaler.
-func (m *Manifest) UnmarshalBinary(b []byte) error {
+func (m *manifest) UnmarshalBinary(b []byte) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

@@ -4,19 +4,24 @@
 
 package simple
 
-// Entry is a JSON representation of a single manifest entry.
-type Entry struct {
+// Entry is a representation of a single manifest entry.
+type Entry interface {
+	// Reference returns the address of the file in the entry.
+	Reference() string
+}
+
+// entry is a JSON representation of a single manifest entry.
+type entry struct {
 	Ref string `json:"reference"`
 }
 
-// NewEntry creates a new Entry struct and returns it.
-func NewEntry(reference string) *Entry {
-	return &Entry{
+// newEntry creates a new Entry struct and returns it.
+func newEntry(reference string) *entry {
+	return &entry{
 		Ref: reference,
 	}
 }
 
-// Reference returns the address of the file in the entry.
-func (me *Entry) Reference() string {
+func (me *entry) Reference() string {
 	return me.Ref
 }

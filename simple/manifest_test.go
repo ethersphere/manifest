@@ -160,14 +160,14 @@ func TestEntries(t *testing.T) {
 }
 
 // checkLength verifies that the given manifest length and integer match.
-func checkLength(t *testing.T, m *simple.Manifest, length int) {
+func checkLength(t *testing.T, m simple.Manifest, length int) {
 	if m.Length() != length {
 		t.Fatalf("expected length to be %d, but is %d instead", length, m.Length())
 	}
 }
 
 // checkEntry verifies that an entry is equal to the one retrieved from the given manifest and path.
-func checkEntry(t *testing.T, m *simple.Manifest, reference string, path string) {
+func checkEntry(t *testing.T, m simple.Manifest, reference string, path string) {
 	n, err := m.Lookup(path)
 	if err != nil {
 		t.Fatal(err)
