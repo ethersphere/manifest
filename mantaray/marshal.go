@@ -211,35 +211,38 @@ func (n *Node) UnmarshalBinary(data []byte) error {
 	data = xorDecryptedBytes
 
 	// Verify version hash.
-	if versionHash := append([]byte{}, data[nodeObfuscationKeySize:nodeObfuscationKeySize+versionHashSize]...); !bytes.Equal(versionHash, version01HashBytes) {
-		return fmt.Errorf("invalid version hash %x", versionHash)
+	versionHash := data[nodeObfuscationKeySize : nodeObfuscationKeySize+versionHashSize]
+
+	if bytes.Equal(versionHash, version01HashBytes) {
+
+		refBytesSize := int(data[nodeHeaderSize-1])
+
+		n.entry = append([]byte{}, data[nodeHeaderSize:nodeHeaderSize+refBytesSize]...)
+		offset := nodeHeaderSize + refBytesSize // skip entry
+		n.forks = make(map[byte]*fork)
+		bb := &bitsForBytes{}
+		bb.fromBytes(data[offset:])
+		offset += 32 // skip forks
+		return bb.iter(func(b byte) error {
+			f := &fork{}
+
+			if len(data) < offset+nodeForkPreReferenceSize+refBytesSize {
+				err := fmt.Errorf("not enough bytes for node fork: %d (%d)", (len(data) - offset), (nodeForkPreReferenceSize + refBytesSize))
+				return fmt.Errorf("%w on byte '%x'", err, []byte{b})
+			}
+
+			err := f.fromBytes(data[offset : offset+nodeForkPreReferenceSize+refBytesSize])
+			if err != nil {
+				return fmt.Errorf("%w on byte '%x'", err, []byte{b})
+			}
+
+			n.forks[b] = f
+			offset += nodeForkPreReferenceSize + refBytesSize
+			return nil
+		})
 	}
 
-	refBytesSize := int(data[nodeHeaderSize-1])
-
-	n.entry = append([]byte{}, data[nodeHeaderSize:nodeHeaderSize+refBytesSize]...)
-	offset := nodeHeaderSize + refBytesSize // skip entry
-	n.forks = make(map[byte]*fork)
-	bb := &bitsForBytes{}
-	bb.fromBytes(data[offset:])
-	offset += 32 // skip forks
-	return bb.iter(func(b byte) error {
-		f := &fork{}
-
-		if len(data) < offset+nodeForkPreReferenceSize+refBytesSize {
-			err := fmt.Errorf("not enough bytes for node fork: %d (%d)", (len(data) - offset), (nodeForkPreReferenceSize + refBytesSize))
-			return fmt.Errorf("%w on byte '%x'", err, []byte{b})
-		}
-
-		err := f.fromBytes(data[offset : offset+nodeForkPreReferenceSize+refBytesSize])
-		if err != nil {
-			return fmt.Errorf("%w on byte '%x'", err, []byte{b})
-		}
-
-		n.forks[b] = f
-		offset += nodeForkPreReferenceSize + refBytesSize
-		return nil
-	})
+	return fmt.Errorf("invalid version hash %x", versionHash)
 }
 
 func (f *fork) fromBytes(b []byte) error {
