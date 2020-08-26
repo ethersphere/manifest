@@ -5,14 +5,56 @@
 package mantaray
 
 import (
+	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 )
 
+// Version constants.
 const (
-	preambleSize = 64
-	forkSize     = 64
+	versionNameString   = "mantaray"
+	versionCode01String = "0.1"
+
+	versionSeparatorString = ":"
+
+	version01String     = versionNameString + versionSeparatorString + versionCode01String   // "mantaray:0.1"
+	version01HashString = "025184789d63635766d78c41900196b57d7400875ebe4d9b5d1e76bd9652a9b7" // pre-calculated version string, Keccak-256
 )
+
+// Node header fields constants.
+const (
+	nodeObfuscationKeySize = 32
+	versionHashSize        = 31
+	nodeRefBytesSize       = 1
+
+	// nodeHeaderSize defines the total size of the header part
+	nodeHeaderSize = nodeObfuscationKeySize + versionHashSize + nodeRefBytesSize
+)
+
+// Node fork constats.
+const (
+	nodeForkTypeBytesSize    = 1
+	nodeForkPrefixBytesSize  = 1
+	nodeForkHeaderSize       = nodeForkTypeBytesSize + nodeForkPrefixBytesSize // 2
+	nodeForkPreReferenceSize = 32
+	nodePrefixMaxSize        = nodeForkPreReferenceSize - nodeForkHeaderSize // 30
+)
+
+var (
+	version01HashBytes []byte
+)
+
+func init() {
+	b, err := hex.DecodeString(version01HashString)
+	if err != nil {
+		panic(err)
+	}
+
+	version01HashBytes = make([]byte, versionHashSize)
+	copy(version01HashBytes, b)
+}
 
 var (
 	// ErrTooShort too short input
@@ -23,18 +65,55 @@ var (
 	ErrForkIvalid = errors.New("fork node without reference")
 )
 
+var obfuscationKeyFn = func(p []byte) (n int, err error) {
+	return rand.Read(p)
+}
+
 // MarshalBinary serialises the node
 func (n *Node) MarshalBinary() (bytes []byte, err error) {
 	if n.forks == nil {
 		return nil, ErrInvalid
 	}
+
+	// header
+
+	headerBytes := make([]byte, nodeHeaderSize)
+
+	if len(n.obfuscationKey) == 0 {
+		// generate obfuscation key
+		obfuscationKey := make([]byte, nodeObfuscationKeySize)
+		for i := 0; i < nodeObfuscationKeySize; {
+			read, _ := obfuscationKeyFn(obfuscationKey[i:])
+			i += read
+		}
+		n.obfuscationKey = obfuscationKey
+	}
+	copy(headerBytes[0:nodeObfuscationKeySize], n.obfuscationKey)
+
+	copy(headerBytes[nodeObfuscationKeySize:nodeObfuscationKeySize+versionHashSize], version01HashBytes)
+
+	headerBytes[nodeObfuscationKeySize+versionHashSize] = uint8(n.refBytesSize)
+
+	bytes = append(bytes, headerBytes...)
+
+	// entry
+
+	entryBytes := make([]byte, n.refBytesSize)
+	copy(entryBytes, n.entry)
+	bytes = append(bytes, entryBytes...)
+
+	// index
+
+	indexBytes := make([]byte, 32)
+
 	var index = &bitsForBytes{}
 	for k := range n.forks {
 		index.set(k)
 	}
-	bytes = make([]byte, 32)
-	copy(bytes, n.entry)
-	bytes = append(bytes, index.bytes()...)
+	copy(indexBytes, index.bytes())
+
+	bytes = append(bytes, indexBytes...)
+
 	err = index.iter(func(b byte) error {
 		f := n.forks[b]
 		ref, err := f.bytes()
@@ -47,7 +126,23 @@ func (n *Node) MarshalBinary() (bytes []byte, err error) {
 	if err != nil {
 		return nil, err
 	}
-	return bytes, nil
+
+	// perform XOR encryption on bytes after obfuscation key
+	xorEncryptedBytes := make([]byte, len(bytes))
+
+	copy(xorEncryptedBytes, bytes[0:nodeObfuscationKeySize])
+
+	for i := nodeObfuscationKeySize; i < len(bytes); i += nodeObfuscationKeySize {
+		end := i + nodeObfuscationKeySize
+		if end > len(bytes) {
+			end = len(bytes)
+		}
+
+		encrypted := encryptDecrypt(bytes[i:end], n.obfuscationKey)
+		copy(xorEncryptedBytes[i:end], encrypted)
+	}
+
+	return xorEncryptedBytes, nil
 }
 
 // bitsForBytes is a set of bytes represented as a 256-length bitvector
@@ -91,33 +186,98 @@ func (bb *bitsForBytes) iter(f func(byte) error) error {
 }
 
 // UnmarshalBinary deserialises a node
-func (n *Node) UnmarshalBinary(bytes []byte) error {
-	if len(bytes) < preambleSize {
+func (n *Node) UnmarshalBinary(data []byte) error {
+	if len(data) < nodeHeaderSize {
 		return ErrTooShort
 	}
-	n.entry = append([]byte{}, bytes[0:32]...)
-	n.forks = make(map[byte]*fork)
-	offset := preambleSize
-	bb := &bitsForBytes{}
-	bb.fromBytes(bytes[32:])
-	return bb.iter(func(b byte) error {
-		f := &fork{}
-		f.fromBytes(bytes[offset : offset+forkSize])
-		n.forks[b] = f
-		offset += forkSize
-		return nil
-	})
+
+	n.obfuscationKey = append([]byte{}, data[0:nodeObfuscationKeySize]...)
+
+	// perform XOR decryption on bytes after obfuscation key
+	xorDecryptedBytes := make([]byte, len(data))
+
+	copy(xorDecryptedBytes, data[0:nodeObfuscationKeySize])
+
+	for i := nodeObfuscationKeySize; i < len(data); i += nodeObfuscationKeySize {
+		end := i + nodeObfuscationKeySize
+		if end > len(data) {
+			end = len(data)
+		}
+
+		decrypted := encryptDecrypt(data[i:end], n.obfuscationKey)
+		copy(xorDecryptedBytes[i:end], decrypted)
+	}
+
+	data = xorDecryptedBytes
+
+	// Verify version hash.
+	versionHash := data[nodeObfuscationKeySize : nodeObfuscationKeySize+versionHashSize]
+
+	if bytes.Equal(versionHash, version01HashBytes) {
+
+		refBytesSize := int(data[nodeHeaderSize-1])
+
+		n.entry = append([]byte{}, data[nodeHeaderSize:nodeHeaderSize+refBytesSize]...)
+		offset := nodeHeaderSize + refBytesSize // skip entry
+		n.forks = make(map[byte]*fork)
+		bb := &bitsForBytes{}
+		bb.fromBytes(data[offset:])
+		offset += 32 // skip forks
+		return bb.iter(func(b byte) error {
+			f := &fork{}
+
+			if len(data) < offset+nodeForkPreReferenceSize+refBytesSize {
+				err := fmt.Errorf("not enough bytes for node fork: %d (%d)", (len(data) - offset), (nodeForkPreReferenceSize + refBytesSize))
+				return fmt.Errorf("%w on byte '%x'", err, []byte{b})
+			}
+
+			err := f.fromBytes(data[offset : offset+nodeForkPreReferenceSize+refBytesSize])
+			if err != nil {
+				return fmt.Errorf("%w on byte '%x'", err, []byte{b})
+			}
+
+			n.forks[b] = f
+			offset += nodeForkPreReferenceSize + refBytesSize
+			return nil
+		})
+	}
+
+	return fmt.Errorf("invalid version hash %x", versionHash)
 }
 
-func (f *fork) fromBytes(b []byte) {
-	f.prefix = bytesToPrefix(b[:32])
-	f.Node = NewNodeRef(b[32:64])
+func (f *fork) fromBytes(b []byte) error {
+	nodeType := uint8(b[0])
+	prefixLen := int(uint8(b[1]))
+
+	if prefixLen == 0 || prefixLen > nodePrefixMaxSize {
+		return fmt.Errorf("invalid prefix length: %d", prefixLen)
+	}
+
+	f.prefix = b[nodeForkHeaderSize : nodeForkHeaderSize+prefixLen]
+	f.Node = NewNodeRef(b[nodeForkPreReferenceSize:])
+	f.Node.nodeType = nodeType
+
+	return nil
 }
 
 func (f *fork) bytes() (b []byte, err error) {
-	b = append(b, prefixToBytes(f.prefix)...)
 	r := refBytes(f)
-	b = append(b, r...)
+	// using 1 byte ('f.Node.refBytesSize') for size
+	if len(r) > 256 {
+		err = fmt.Errorf("node reference size > 256: %d", len(r))
+		return
+	}
+	b = append(b, f.Node.nodeType)
+	b = append(b, uint8(len(f.prefix)))
+
+	prefixBytes := make([]byte, nodePrefixMaxSize)
+	copy(prefixBytes, f.prefix)
+	b = append(b, prefixBytes...)
+
+	refBytes := make([]byte, len(r))
+	copy(refBytes, r)
+	b = append(b, refBytes...)
+
 	return b, nil
 }
 
@@ -127,19 +287,14 @@ func nodeRefBytes(f *fork) []byte {
 	return f.Node.ref
 }
 
-func prefixToBytes(prefix []byte) (bytes []byte) {
-	bytes = append(bytes, prefix...)
-	for i := len(prefix); i < 32; i++ {
-		bytes = append(bytes, '/')
-	}
-	return bytes
-}
+// encryptDecrypt runs a XOR encryption on the input bytes, encrypting it if it
+// hasn't already been, and decrypting it if it has, using the key provided.
+func encryptDecrypt(input, key []byte) []byte {
+	output := make([]byte, len(input))
 
-func bytesToPrefix(bytes []byte) (prefix []byte) {
-	for _, b := range bytes {
-		if b != '/' {
-			prefix = append(prefix, b)
-		}
+	for i := 0; i < len(input); i++ {
+		output[i] = input[i] ^ key[i%len(key)]
 	}
-	return prefix
+
+	return output
 }
