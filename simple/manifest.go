@@ -21,7 +21,7 @@ var (
 // Manifest is a representation of a manifest.
 type Manifest interface {
 	// Add adds a manifest entry to the specified path.
-	Add(string, string) error
+	Add(string, string, map[string]string) error
 	// Remove removes a manifest entry on the specified path.
 	Remove(string) error
 	// Lookup returns a manifest node entry if one is found in the specified path.
@@ -53,7 +53,7 @@ func notFound(path string) error {
 	return fmt.Errorf("entry on '%s': %w", path, ErrNotFound)
 }
 
-func (m *manifest) Add(path string, entry string) error {
+func (m *manifest) Add(path string, entry string, metadata map[string]string) error {
 	if len(path) == 0 {
 		return ErrEmptyPath
 	}
@@ -61,7 +61,7 @@ func (m *manifest) Add(path string, entry string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.Entries[path] = newEntry(entry)
+	m.Entries[path] = newEntry(entry, metadata)
 
 	return nil
 }
@@ -89,7 +89,7 @@ func (m *manifest) Lookup(path string) (Entry, error) {
 	}
 
 	// return a copy to prevent external modification
-	return newEntry(entry.Reference()), nil
+	return newEntry(entry.Reference(), entry.Metadata()), nil
 }
 
 func (m *manifest) Length() int {

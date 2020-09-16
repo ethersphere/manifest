@@ -36,6 +36,7 @@ func TestNilPath(t *testing.T) {
 type e struct {
 	path      string
 	reference string
+	metadata  map[string]string
 }
 
 var testCases = []struct {
@@ -87,6 +88,13 @@ var testCases = []struct {
 				path:      "readme.md",
 				reference: randomAddress(),
 			},
+			{
+				path: "/",
+				metadata: map[string]string{
+					"index-document": "readme.md",
+					"error-document": "404.html",
+				},
+			},
 		},
 	},
 }
@@ -100,7 +108,7 @@ func TestEntries(t *testing.T) {
 
 			// add entries
 			for i, e := range tc.entries {
-				err := m.Add(e.path, e.reference)
+				err := m.Add(e.path, e.reference, e.metadata)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -125,7 +133,7 @@ func TestEntries(t *testing.T) {
 
 			newReference := randomAddress()
 
-			err := m.Add(lastEntry.path, newReference)
+			err := m.Add(lastEntry.path, newReference, map[string]string{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -190,7 +198,7 @@ func TestMarshal(t *testing.T) {
 			m := simple.NewManifest()
 
 			for _, e := range tc.entries {
-				err := m.Add(e.path, e.reference)
+				err := m.Add(e.path, e.reference, e.metadata)
 				if err != nil {
 					t.Fatal(err)
 				}
