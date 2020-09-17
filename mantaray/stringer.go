@@ -43,12 +43,21 @@ func nodeStringWithPrefix(n *Node, prefix string, writer io.Writer) {
 	io.WriteString(writer, fmt.Sprint(" ]"))
 	io.WriteString(writer, fmt.Sprint("\n"))
 	io.WriteString(writer, prefix)
-	if len(n.forks) == 0 {
-		io.WriteString(writer, tableCharsMap["bottom-left"])
-	} else {
+	if len(n.forks) > 0 || len(n.metadata) > 0 {
 		io.WriteString(writer, tableCharsMap["left-mid"])
+	} else {
+		io.WriteString(writer, tableCharsMap["bottom-left"])
 	}
 	io.WriteString(writer, fmt.Sprintf("e: '%s'\n", string(n.entry)))
+	if len(n.metadata) > 0 {
+		io.WriteString(writer, prefix)
+		if len(n.forks) > 0 {
+			io.WriteString(writer, tableCharsMap["left-mid"])
+		} else {
+			io.WriteString(writer, tableCharsMap["bottom-left"])
+		}
+		io.WriteString(writer, fmt.Sprintf("m: '%s'\n", n.metadata))
+	}
 	counter := 0
 	for k, f := range n.forks {
 		isLast := counter != len(n.forks)-1

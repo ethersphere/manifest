@@ -31,7 +31,7 @@ func TestWalkNode(t *testing.T) {
 			for i := 0; i < len(tc.toAdd); i++ {
 				c := tc.toAdd[i]
 				e := append(make([]byte, 32-len(c)), c...)
-				err := n.Add(c, e, nil)
+				err := n.Add(c, e, nil, nil)
 				if err != nil {
 					t.Fatalf("expected no error, got %v", err)
 				}
@@ -104,7 +104,7 @@ func TestWalk(t *testing.T) {
 			for i := 0; i < len(tc.toAdd); i++ {
 				c := tc.toAdd[i]
 				e := append(make([]byte, 32-len(c)), c...)
-				err := n.Add(c, e, nil)
+				err := n.Add(c, e, nil, nil)
 				if err != nil {
 					t.Fatalf("expected no error, got %v", err)
 				}
