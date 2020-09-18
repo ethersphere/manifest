@@ -272,8 +272,7 @@ func (n *Node) UnmarshalBinary(data []byte) error {
 			f := &fork{}
 
 			if len(data) < offset+nodeForkTypeBytesSize {
-				err := fmt.Errorf("not enough bytes for node fork: %d (%d)", (len(data) - offset), (nodeForkTypeBytesSize))
-				return fmt.Errorf("%w on byte '%x'", err, []byte{b})
+				return fmt.Errorf("not enough bytes for node fork: %d (%d) on byte '%x'", (len(data) - offset), (nodeForkTypeBytesSize), []byte{b})
 			}
 
 			nodeType := uint8(data[offset])
@@ -282,8 +281,7 @@ func (n *Node) UnmarshalBinary(data []byte) error {
 
 			if nodeTypeIsWithMetadataType(nodeType) {
 				if len(data) < offset+nodeForkPreReferenceSize+refBytesSize+nodeForkMetadataBytesSize {
-					err := fmt.Errorf("not enough bytes for node fork: %d (%d)", (len(data) - offset), (nodeForkPreReferenceSize + refBytesSize + nodeForkMetadataBytesSize))
-					return fmt.Errorf("%w on byte '%x'", err, []byte{b})
+					return fmt.Errorf("not enough bytes for node fork: %d (%d) on byte '%x'", (len(data) - offset), (nodeForkPreReferenceSize + refBytesSize + nodeForkMetadataBytesSize), []byte{b})
 				}
 
 				metadataBytesSize := binary.BigEndian.Uint16(data[offset+nodeForkSize : offset+nodeForkSize+nodeForkMetadataBytesSize])
@@ -297,8 +295,7 @@ func (n *Node) UnmarshalBinary(data []byte) error {
 				}
 			} else {
 				if len(data) < offset+nodeForkPreReferenceSize+refBytesSize {
-					err := fmt.Errorf("not enough bytes for node fork: %d (%d)", (len(data) - offset), (nodeForkPreReferenceSize + refBytesSize))
-					return fmt.Errorf("%w on byte '%x'", err, []byte{b})
+					return fmt.Errorf("not enough bytes for node fork: %d (%d) on byte '%x'", (len(data) - offset), (nodeForkPreReferenceSize + refBytesSize), []byte{b})
 				}
 
 				err := f.fromBytes(data[offset : offset+nodeForkSize])
