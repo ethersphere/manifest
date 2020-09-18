@@ -41,9 +41,14 @@ const (
 	nodeTypeValue             = uint8(2)
 	nodeTypeEdge              = uint8(4)
 	nodeTypeWithPathSeparator = uint8(8)
+	nodeTypeWithMetadata      = uint8(16)
 
 	nodeTypeMask = uint8(255)
 )
+
+func nodeTypeIsWithMetadataType(nodeType uint8) bool {
+	return nodeType&nodeTypeWithMetadata == nodeTypeWithMetadata
+}
 
 // NewNodeRef is the exported Node constructor used to represent manifests by reference
 func NewNodeRef(ref []byte) *Node {
@@ -71,6 +76,10 @@ func (n *Node) isWithPathSeparatorType() bool {
 	return n.nodeType&nodeTypeWithPathSeparator == nodeTypeWithPathSeparator
 }
 
+func (n *Node) isWithMetadataType() bool {
+	return n.nodeType&nodeTypeWithMetadata == nodeTypeWithMetadata
+}
+
 func (n *Node) makeValue() {
 	n.nodeType = n.nodeType | nodeTypeValue
 }
@@ -81,6 +90,10 @@ func (n *Node) makeEdge() {
 
 func (n *Node) makeWithPathSeparator() {
 	n.nodeType = n.nodeType | nodeTypeWithPathSeparator
+}
+
+func (n *Node) makeWithMetadata() {
+	n.nodeType = n.nodeType | nodeTypeWithMetadata
 }
 
 //nolint,unused
@@ -95,6 +108,11 @@ func (n *Node) makeNotEdge() {
 
 func (n *Node) makeNotWithPathSeparator() {
 	n.nodeType = (nodeTypeMask ^ nodeTypeWithPathSeparator) & n.nodeType
+}
+
+//nolint,unused
+func (n *Node) makeNotWithMetadata() {
+	n.nodeType = (nodeTypeMask ^ nodeTypeWithMetadata) & n.nodeType
 }
 
 func (n *Node) SetObfuscationKey(obfuscationKey []byte) {
@@ -166,7 +184,10 @@ func (n *Node) Add(path []byte, entry []byte, metadata map[string]string, ls Loa
 
 	if len(path) == 0 {
 		n.entry = entry
-		n.metadata = metadata
+		if len(metadata) > 0 {
+			n.metadata = metadata
+			n.makeWithMetadata()
+		}
 		n.ref = nil
 		return nil
 	}
@@ -194,7 +215,10 @@ func (n *Node) Add(path []byte, entry []byte, metadata map[string]string, ls Loa
 			return nil
 		}
 		nn.entry = entry
-		nn.metadata = metadata
+		if len(metadata) > 0 {
+			nn.metadata = metadata
+			nn.makeWithMetadata()
+		}
 		nn.makeValue()
 		nn.updateIsWithPathSeparator(path)
 		n.forks[path[0]] = &fork{path, nn}
