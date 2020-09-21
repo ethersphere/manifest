@@ -31,13 +31,13 @@ func nodeStringWithPrefix(n *Node, prefix string, writer io.Writer) {
 	io.WriteString(writer, tableCharsMap["left-mid"])
 	io.WriteString(writer, fmt.Sprintf("t: '%s'", strconv.FormatInt(int64(n.nodeType), 2)))
 	io.WriteString(writer, fmt.Sprint(" ["))
-	if n.isValueType() {
+	if n.IsValueType() {
 		io.WriteString(writer, fmt.Sprint(" Value"))
 	}
-	if n.isEdgeType() {
+	if n.IsEdgeType() {
 		io.WriteString(writer, fmt.Sprint(" Edge"))
 	}
-	if n.isWithPathSeparatorType() {
+	if n.IsWithPathSeparatorType() {
 		io.WriteString(writer, fmt.Sprint(" PathSeparator"))
 	}
 	io.WriteString(writer, fmt.Sprint(" ]"))

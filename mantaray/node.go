@@ -64,19 +64,23 @@ func notFound(path []byte) error {
 	return fmt.Errorf("entry on '%s' ('%x'): %w", path, path, ErrNotFound)
 }
 
-func (n *Node) isValueType() bool {
+// IsValueType returns true if the node contains entry.
+func (n *Node) IsValueType() bool {
 	return n.nodeType&nodeTypeValue == nodeTypeValue
 }
 
-func (n *Node) isEdgeType() bool {
+// IsEdgeType returns true if the node forks into other nodes.
+func (n *Node) IsEdgeType() bool {
 	return n.nodeType&nodeTypeEdge == nodeTypeEdge
 }
 
-func (n *Node) isWithPathSeparatorType() bool {
+// IsWithPathSeparatorType returns true if the node path contains separator character.
+func (n *Node) IsWithPathSeparatorType() bool {
 	return n.nodeType&nodeTypeWithPathSeparator == nodeTypeWithPathSeparator
 }
 
-func (n *Node) isWithMetadataType() bool {
+// IsWithMetadataType returns true if the node contains metadata.
+func (n *Node) IsWithMetadataType() bool {
 	return n.nodeType&nodeTypeWithMetadata == nodeTypeWithMetadata
 }
 

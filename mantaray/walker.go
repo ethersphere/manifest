@@ -20,14 +20,14 @@ func walkNode(path []byte, l Loader, n *Node, walkFn WalkNodeFunc) error {
 		}
 	}
 
-	if n.isValueType() {
+	if n.IsValueType() {
 		err := walkNodeFnCopyBytes(path, n, nil, walkFn)
 		if err != nil {
 			return err
 		}
 	}
 
-	if n.isEdgeType() {
+	if n.IsEdgeType() {
 		for _, v := range n.forks {
 			nextPath := append(path[:0:0], path...)
 			nextPath = append(nextPath, v.prefix...)
@@ -84,7 +84,7 @@ func walk(path, prefix []byte, l Loader, n *Node, walkFn WalkFunc) error {
 		nextPath = append(nextPath, prefix[i])
 	}
 
-	if n.isValueType() {
+	if n.IsValueType() {
 		if nextPath[len(nextPath)-1] == PathSeparator {
 			// path ends with separator; already reported
 		} else {
@@ -95,7 +95,7 @@ func walk(path, prefix []byte, l Loader, n *Node, walkFn WalkFunc) error {
 		}
 	}
 
-	if n.isEdgeType() {
+	if n.IsEdgeType() {
 		for _, v := range n.forks {
 			err := walk(nextPath, v.prefix, l, v.Node, walkFn)
 			if err != nil {
