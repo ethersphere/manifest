@@ -220,3 +220,69 @@ func TestMarshal(t *testing.T) {
 		})
 	}
 }
+
+func TestHasPrefix(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		toAdd       []string
+		testPrefix  []string
+		shouldExist []bool
+	}{
+		{
+			name: "simple",
+			toAdd: []string{
+				"index.html",
+				"img/1.png",
+				"img/2.png",
+				"robots.txt",
+			},
+			testPrefix: []string{
+				"img/",
+				"images/",
+			},
+			shouldExist: []bool{
+				true,
+				false,
+			},
+		},
+		{
+			name: "nested-single",
+			toAdd: []string{
+				"some-path/file.ext",
+			},
+			testPrefix: []string{
+				"some-path/",
+				"some-path/file",
+				"some-other-path/",
+			},
+			shouldExist: []bool{
+				true,
+				true,
+				false,
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := simple.NewManifest()
+
+			for _, e := range tc.toAdd {
+				err := m.Add(e, "", nil)
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+			}
+
+			for i := 0; i < len(tc.testPrefix); i++ {
+				testPrefix := tc.testPrefix[i]
+				shouldExist := tc.shouldExist[i]
+
+				exists := m.HasPrefix(testPrefix)
+
+				if shouldExist != exists {
+					t.Errorf("expected prefix path %s to be %t, was %t", testPrefix, shouldExist, exists)
+				}
+			}
+
+		})
+	}
+}
