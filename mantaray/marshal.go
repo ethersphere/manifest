@@ -7,20 +7,30 @@ package mantaray
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+)
+
+const (
+	maxUint16 = ^uint16(0)
 )
 
 // Version constants.
 const (
 	versionNameString   = "mantaray"
 	versionCode01String = "0.1"
+	versionCode02String = "0.2"
 
 	versionSeparatorString = ":"
 
 	version01String     = versionNameString + versionSeparatorString + versionCode01String   // "mantaray:0.1"
 	version01HashString = "025184789d63635766d78c41900196b57d7400875ebe4d9b5d1e76bd9652a9b7" // pre-calculated version string, Keccak-256
+
+	version02String     = versionNameString + versionSeparatorString + versionCode02String   // "mantaray:0.2"
+	version02HashString = "5768b3b6a7db56d21d1abff40d41cebfc83448fed8d7e9b06ec0d3b073f28f7b" // pre-calculated version string, Keccak-256
 )
 
 // Node header fields constants.
@@ -40,20 +50,28 @@ const (
 	nodeForkHeaderSize       = nodeForkTypeBytesSize + nodeForkPrefixBytesSize // 2
 	nodeForkPreReferenceSize = 32
 	nodePrefixMaxSize        = nodeForkPreReferenceSize - nodeForkHeaderSize // 30
+	// "mantaray:0.2"
+	nodeForkMetadataBytesSize = 2
 )
 
 var (
 	version01HashBytes []byte
+	version02HashBytes []byte
 )
 
 func init() {
-	b, err := hex.DecodeString(version01HashString)
+	initVersion(version01HashString, &version01HashBytes)
+	initVersion(version02HashString, &version02HashBytes)
+}
+
+func initVersion(hash string, bytes *[]byte) {
+	b, err := hex.DecodeString(hash)
 	if err != nil {
 		panic(err)
 	}
 
-	version01HashBytes = make([]byte, versionHashSize)
-	copy(version01HashBytes, b)
+	*bytes = make([]byte, versionHashSize)
+	copy(*bytes, b)
 }
 
 var (
@@ -90,7 +108,7 @@ func (n *Node) MarshalBinary() (bytes []byte, err error) {
 	}
 	copy(headerBytes[0:nodeObfuscationKeySize], n.obfuscationKey)
 
-	copy(headerBytes[nodeObfuscationKeySize:nodeObfuscationKeySize+versionHashSize], version01HashBytes)
+	copy(headerBytes[nodeObfuscationKeySize:nodeObfuscationKeySize+versionHashSize], version02HashBytes)
 
 	headerBytes[nodeObfuscationKeySize+versionHashSize] = uint8(n.refBytesSize)
 
@@ -240,6 +258,56 @@ func (n *Node) UnmarshalBinary(data []byte) error {
 			offset += nodeForkPreReferenceSize + refBytesSize
 			return nil
 		})
+	} else if bytes.Equal(versionHash, version02HashBytes) {
+
+		refBytesSize := int(data[nodeHeaderSize-1])
+
+		n.entry = append([]byte{}, data[nodeHeaderSize:nodeHeaderSize+refBytesSize]...)
+		offset := nodeHeaderSize + refBytesSize // skip entry
+		n.forks = make(map[byte]*fork)
+		bb := &bitsForBytes{}
+		bb.fromBytes(data[offset:])
+		offset += 32 // skip forks
+		return bb.iter(func(b byte) error {
+			f := &fork{}
+
+			if len(data) < offset+nodeForkTypeBytesSize {
+				return fmt.Errorf("not enough bytes for node fork: %d (%d) on byte '%x'", (len(data) - offset), (nodeForkTypeBytesSize), []byte{b})
+			}
+
+			nodeType := uint8(data[offset])
+
+			nodeForkSize := nodeForkPreReferenceSize + refBytesSize
+
+			if nodeTypeIsWithMetadataType(nodeType) {
+				if len(data) < offset+nodeForkPreReferenceSize+refBytesSize+nodeForkMetadataBytesSize {
+					return fmt.Errorf("not enough bytes for node fork: %d (%d) on byte '%x'", (len(data) - offset), (nodeForkPreReferenceSize + refBytesSize + nodeForkMetadataBytesSize), []byte{b})
+				}
+
+				metadataBytesSize := binary.BigEndian.Uint16(data[offset+nodeForkSize : offset+nodeForkSize+nodeForkMetadataBytesSize])
+
+				nodeForkSize += nodeForkMetadataBytesSize
+				nodeForkSize += int(metadataBytesSize)
+
+				err := f.fromBytes02(data[offset:offset+nodeForkSize], refBytesSize, int(metadataBytesSize))
+				if err != nil {
+					return fmt.Errorf("%w on byte '%x'", err, []byte{b})
+				}
+			} else {
+				if len(data) < offset+nodeForkPreReferenceSize+refBytesSize {
+					return fmt.Errorf("not enough bytes for node fork: %d (%d) on byte '%x'", (len(data) - offset), (nodeForkPreReferenceSize + refBytesSize), []byte{b})
+				}
+
+				err := f.fromBytes(data[offset : offset+nodeForkSize])
+				if err != nil {
+					return fmt.Errorf("%w on byte '%x'", err, []byte{b})
+				}
+			}
+
+			n.forks[b] = f
+			offset += nodeForkSize
+			return nil
+		})
 	}
 
 	return fmt.Errorf("invalid version hash %x", versionHash)
@@ -256,6 +324,34 @@ func (f *fork) fromBytes(b []byte) error {
 	f.prefix = b[nodeForkHeaderSize : nodeForkHeaderSize+prefixLen]
 	f.Node = NewNodeRef(b[nodeForkPreReferenceSize:])
 	f.Node.nodeType = nodeType
+
+	return nil
+}
+
+func (f *fork) fromBytes02(b []byte, refBytesSize, metadataBytesSize int) error {
+	nodeType := uint8(b[0])
+	prefixLen := int(uint8(b[1]))
+
+	if prefixLen == 0 || prefixLen > nodePrefixMaxSize {
+		return fmt.Errorf("invalid prefix length: %d", prefixLen)
+	}
+
+	f.prefix = b[nodeForkHeaderSize : nodeForkHeaderSize+prefixLen]
+	f.Node = NewNodeRef(b[nodeForkPreReferenceSize : nodeForkPreReferenceSize+refBytesSize])
+	f.Node.nodeType = nodeType
+
+	if metadataBytesSize > 0 {
+		metadataBytes := b[nodeForkPreReferenceSize+refBytesSize+nodeForkMetadataBytesSize:]
+
+		metadata := make(map[string]string)
+		// using JSON encoding for metadata
+		err := json.Unmarshal(metadataBytes, &metadata)
+		if err != nil {
+			return err
+		}
+
+		f.Node.metadata = metadata
+	}
 
 	return nil
 }
@@ -277,6 +373,25 @@ func (f *fork) bytes() (b []byte, err error) {
 	refBytes := make([]byte, len(r))
 	copy(refBytes, r)
 	b = append(b, refBytes...)
+
+	if f.Node.isWithMetadataType() {
+		// using JSON encoding for metadata
+		metadataJSONBytes, err1 := json.Marshal(f.Node.metadata)
+		if err1 != nil {
+			return b, err1
+		}
+
+		metadataJSONBytesSize := len(metadataJSONBytes)
+		if metadataJSONBytesSize > int(maxUint16) {
+			return b, ErrMetadataTooLarge
+		}
+
+		mBytesSize := make([]byte, 2)
+		binary.BigEndian.PutUint16(mBytesSize, uint16(metadataJSONBytesSize))
+		b = append(b, mBytesSize...)
+
+		b = append(b, metadataJSONBytes...)
+	}
 
 	return b, nil
 }

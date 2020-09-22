@@ -10,6 +10,12 @@ import (
 	"testing"
 )
 
+type nodeEntry struct {
+	path     []byte
+	entry    []byte
+	metadata map[string]string
+}
+
 func TestNilPath(t *testing.T) {
 	n := New()
 	_, err := n.Lookup(nil, nil)
@@ -34,7 +40,7 @@ func TestAddAndLookup(t *testing.T) {
 	for i := 0; i < len(testCases); i++ {
 		c := testCases[i]
 		e := append(make([]byte, 32-len(c)), c...)
-		err := n.Add(c, e, nil)
+		err := n.Add(c, e, nil, nil)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
@@ -55,16 +61,30 @@ func TestAddAndLookup(t *testing.T) {
 func TestRemove(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
-		toAdd    [][]byte
+		toAdd    []nodeEntry
 		toRemove [][]byte
 	}{
 		{
 			name: "simple",
-			toAdd: [][]byte{
-				[]byte("index.html"),
-				[]byte("img/1.png"),
-				[]byte("img/2.png"),
-				[]byte("robots.txt"),
+			toAdd: []nodeEntry{
+				{
+					path: []byte("/"),
+					metadata: map[string]string{
+						"index-document": "index.html",
+					},
+				},
+				{
+					path: []byte("index.html"),
+				},
+				{
+					path: []byte("img/1.png"),
+				},
+				{
+					path: []byte("img/2.png"),
+				},
+				{
+					path: []byte("robots.txt"),
+				},
 			},
 			toRemove: [][]byte{
 				[]byte("img/2.png"),
@@ -72,12 +92,22 @@ func TestRemove(t *testing.T) {
 		},
 		{
 			name: "nested-prefix-is-not-collapsed",
-			toAdd: [][]byte{
-				[]byte("index.html"),
-				[]byte("img/1.png"),
-				[]byte("img/2/test1.png"),
-				[]byte("img/2/test2.png"),
-				[]byte("robots.txt"),
+			toAdd: []nodeEntry{
+				{
+					path: []byte("index.html"),
+				},
+				{
+					path: []byte("img/1.png"),
+				},
+				{
+					path: []byte("img/2/test1.png"),
+				},
+				{
+					path: []byte("img/2/test2.png"),
+				},
+				{
+					path: []byte("robots.txt"),
+				},
 			},
 			toRemove: [][]byte{
 				[]byte("img/2/test1.png"),
@@ -88,14 +118,18 @@ func TestRemove(t *testing.T) {
 			n := New()
 
 			for i := 0; i < len(tc.toAdd); i++ {
-				c := tc.toAdd[i]
-				e := append(make([]byte, 32-len(c)), c...)
-				err := n.Add(c, e, nil)
+				c := tc.toAdd[i].path
+				e := tc.toAdd[i].entry
+				if len(e) == 0 {
+					e = append(make([]byte, 32-len(c)), c...)
+				}
+				m := tc.toAdd[i].metadata
+				err := n.Add(c, e, m, nil)
 				if err != nil {
 					t.Fatalf("expected no error, got %v", err)
 				}
 				for j := 0; j < i; j++ {
-					d := tc.toAdd[j]
+					d := tc.toAdd[j].path
 					m, err := n.Lookup(d, nil)
 					if err != nil {
 						t.Fatalf("expected no error, got %v", err)

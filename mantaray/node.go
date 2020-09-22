@@ -16,8 +16,9 @@ const (
 
 // Error used when lookup path does not match
 var (
-	ErrNotFound  = errors.New("not found")
-	ErrEmptyPath = errors.New("empty path")
+	ErrNotFound         = errors.New("not found")
+	ErrEmptyPath        = errors.New("empty path")
+	ErrMetadataTooLarge = errors.New("metadata too large")
 )
 
 // Node represents a mantaray Node
@@ -27,6 +28,7 @@ type Node struct {
 	obfuscationKey []byte
 	ref            []byte // reference to uninstantiated Node persisted serialised
 	entry          []byte
+	metadata       map[string]string
 	forks          map[byte]*fork
 }
 
@@ -39,9 +41,14 @@ const (
 	nodeTypeValue             = uint8(2)
 	nodeTypeEdge              = uint8(4)
 	nodeTypeWithPathSeparator = uint8(8)
+	nodeTypeWithMetadata      = uint8(16)
 
 	nodeTypeMask = uint8(255)
 )
+
+func nodeTypeIsWithMetadataType(nodeType uint8) bool {
+	return nodeType&nodeTypeWithMetadata == nodeTypeWithMetadata
+}
 
 // NewNodeRef is the exported Node constructor used to represent manifests by reference
 func NewNodeRef(ref []byte) *Node {
@@ -69,6 +76,10 @@ func (n *Node) isWithPathSeparatorType() bool {
 	return n.nodeType&nodeTypeWithPathSeparator == nodeTypeWithPathSeparator
 }
 
+func (n *Node) isWithMetadataType() bool {
+	return n.nodeType&nodeTypeWithMetadata == nodeTypeWithMetadata
+}
+
 func (n *Node) makeValue() {
 	n.nodeType = n.nodeType | nodeTypeValue
 }
@@ -79,6 +90,10 @@ func (n *Node) makeEdge() {
 
 func (n *Node) makeWithPathSeparator() {
 	n.nodeType = n.nodeType | nodeTypeWithPathSeparator
+}
+
+func (n *Node) makeWithMetadata() {
+	n.nodeType = n.nodeType | nodeTypeWithMetadata
 }
 
 //nolint,unused
@@ -95,6 +110,11 @@ func (n *Node) makeNotWithPathSeparator() {
 	n.nodeType = (nodeTypeMask ^ nodeTypeWithPathSeparator) & n.nodeType
 }
 
+//nolint,unused
+func (n *Node) makeNotWithMetadata() {
+	n.nodeType = (nodeTypeMask ^ nodeTypeWithMetadata) & n.nodeType
+}
+
 func (n *Node) SetObfuscationKey(obfuscationKey []byte) {
 	bytes := make([]byte, 32)
 	copy(bytes, obfuscationKey)
@@ -109,6 +129,11 @@ func (n *Node) Reference() []byte {
 // Entry returns the value stored on the specific path.
 func (n *Node) Entry() []byte {
 	return n.entry
+}
+
+// Metadata returns the metadata stored on the specific path.
+func (n *Node) Metadata() map[string]string {
+	return n.metadata
 }
 
 // LookupNode finds the node for a path or returns error if not found
@@ -142,20 +167,27 @@ func (n *Node) Lookup(path []byte, l Loader) ([]byte, error) {
 }
 
 // Add adds an entry to the path
-func (n *Node) Add(path []byte, entry []byte, ls LoadSaver) error {
+func (n *Node) Add(path []byte, entry []byte, metadata map[string]string, ls LoadSaver) error {
 	if n.refBytesSize == 0 {
 		if len(entry) > 256 {
 			return fmt.Errorf("node entry size > 256: %d", len(entry))
 		}
-		n.refBytesSize = len(entry)
+		// empty entry for directories
+		if len(entry) > 0 {
+			n.refBytesSize = len(entry)
+		}
 	} else {
-		if n.refBytesSize != len(entry) {
+		if len(entry) > 0 && n.refBytesSize != len(entry) {
 			return fmt.Errorf("invalid entry size: %d, expected: %d", len(entry), n.refBytesSize)
 		}
 	}
 
 	if len(path) == 0 {
 		n.entry = entry
+		if len(metadata) > 0 {
+			n.metadata = metadata
+			n.makeWithMetadata()
+		}
 		n.ref = nil
 		return nil
 	}
@@ -173,7 +205,7 @@ func (n *Node) Add(path []byte, entry []byte, ls LoadSaver) error {
 		if len(path) > nodePrefixMaxSize {
 			prefix := path[:nodePrefixMaxSize]
 			rest := path[nodePrefixMaxSize:]
-			err := nn.Add(rest, entry, ls)
+			err := nn.Add(rest, entry, metadata, ls)
 			if err != nil {
 				return err
 			}
@@ -183,6 +215,10 @@ func (n *Node) Add(path []byte, entry []byte, ls LoadSaver) error {
 			return nil
 		}
 		nn.entry = entry
+		if len(metadata) > 0 {
+			nn.metadata = metadata
+			nn.makeWithMetadata()
+		}
 		nn.makeValue()
 		nn.updateIsWithPathSeparator(path)
 		n.forks[path[0]] = &fork{path, nn}
@@ -203,7 +239,7 @@ func (n *Node) Add(path []byte, entry []byte, ls LoadSaver) error {
 	// NOTE: special case on edge split
 	nn.updateIsWithPathSeparator(path)
 	// add new for shared prefix
-	err := nn.Add(path[len(c):], entry, ls)
+	err := nn.Add(path[len(c):], entry, metadata, ls)
 	if err != nil {
 		return err
 	}

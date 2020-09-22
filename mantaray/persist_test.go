@@ -35,7 +35,7 @@ func TestPersistIdempotence(t *testing.T) {
 		}
 		var v [32]byte
 		copy(v[:], c)
-		err = n.Add(c, v[:], ls)
+		err = n.Add(c, v[:], nil, ls)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
