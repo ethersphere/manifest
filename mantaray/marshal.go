@@ -374,7 +374,7 @@ func (f *fork) bytes() (b []byte, err error) {
 	copy(refBytes, r)
 	b = append(b, refBytes...)
 
-	if f.Node.isWithMetadataType() {
+	if f.Node.IsWithMetadataType() {
 		// using JSON encoding for metadata
 		metadataJSONBytes, err1 := json.Marshal(f.Node.metadata)
 		if err1 != nil {
