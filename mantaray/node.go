@@ -289,3 +289,27 @@ func common(a, b []byte) (c []byte) {
 	}
 	return c
 }
+
+// HasPrefix tests whether the node contains prefix path.
+func (n *Node) HasPrefix(path []byte, l Loader) (bool, error) {
+	if n.forks == nil {
+		if err := n.load(l); err != nil {
+			return false, err
+		}
+	}
+	if len(path) == 0 {
+		return true, nil
+	}
+	f := n.forks[path[0]]
+	if f == nil {
+		return false, nil
+	}
+	c := common(f.prefix, path)
+	if len(c) == len(f.prefix) {
+		return f.Node.HasPrefix(path[len(c):], l)
+	}
+	if bytes.HasPrefix(f.prefix, path) {
+		return true, nil
+	}
+	return false, nil
+}

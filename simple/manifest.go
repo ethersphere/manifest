@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 )
 
@@ -26,6 +27,8 @@ type Manifest interface {
 	Remove(string) error
 	// Lookup returns a manifest node entry if one is found in the specified path.
 	Lookup(string) (Entry, error)
+	// HasPrefix tests whether the specified prefix path exists.
+	HasPrefix(string) bool
 	// Length returns an implementation-specific count of elements in the manifest.
 	// For Manifest, this means the number of all the existing entries.
 	Length() int
@@ -90,6 +93,19 @@ func (m *manifest) Lookup(path string) (Entry, error) {
 
 	// return a copy to prevent external modification
 	return newEntry(entry.Reference(), entry.Metadata()), nil
+}
+
+func (m *manifest) HasPrefix(path string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	for k := range m.Entries {
+		if strings.HasPrefix(k, path) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (m *manifest) Length() int {

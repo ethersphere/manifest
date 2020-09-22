@@ -156,3 +156,74 @@ func TestRemove(t *testing.T) {
 		})
 	}
 }
+
+func TestHasPrefix(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		toAdd       [][]byte
+		testPrefix  [][]byte
+		shouldExist []bool
+	}{
+		{
+			name: "simple",
+			toAdd: [][]byte{
+				[]byte("index.html"),
+				[]byte("img/1.png"),
+				[]byte("img/2.png"),
+				[]byte("robots.txt"),
+			},
+			testPrefix: [][]byte{
+				[]byte("img/"),
+				[]byte("images/"),
+			},
+			shouldExist: []bool{
+				true,
+				false,
+			},
+		},
+		{
+			name: "nested-single",
+			toAdd: [][]byte{
+				[]byte("some-path/file.ext"),
+			},
+			testPrefix: [][]byte{
+				[]byte("some-path/"),
+				[]byte("some-path/file"),
+				[]byte("some-other-path/"),
+			},
+			shouldExist: []bool{
+				true,
+				true,
+				false,
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			n := New()
+
+			for i := 0; i < len(tc.toAdd); i++ {
+				c := tc.toAdd[i]
+				e := append(make([]byte, 32-len(c)), c...)
+				err := n.Add(c, e, nil, nil)
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+			}
+
+			for i := 0; i < len(tc.testPrefix); i++ {
+				testPrefix := tc.testPrefix[i]
+				shouldExist := tc.shouldExist[i]
+
+				exists, err := n.HasPrefix(testPrefix, nil)
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+
+				if shouldExist != exists {
+					t.Errorf("expected prefix path %s to be %t, was %t", testPrefix, shouldExist, exists)
+				}
+			}
+
+		})
+	}
+}
