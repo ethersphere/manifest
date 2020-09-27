@@ -239,6 +239,10 @@ func (n *Node) Add(path []byte, entry []byte, metadata map[string]string, ls Loa
 		f.Node.updateIsWithPathSeparator(rest)
 		nn.forks[rest[0]] = &fork{rest, f.Node}
 		nn.makeEdge()
+		// if common path is full path new node is value type
+		if len(path) == len(c) {
+			nn.makeValue()
+		}
 	}
 	// NOTE: special case on edge split
 	nn.updateIsWithPathSeparator(path)
