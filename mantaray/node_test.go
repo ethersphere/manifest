@@ -7,6 +7,7 @@ package mantaray
 import (
 	"bytes"
 	"errors"
+	"strconv"
 	"testing"
 )
 
@@ -55,6 +56,98 @@ func TestAddAndLookup(t *testing.T) {
 				t.Fatalf("expected value %x, got %x", d, m)
 			}
 		}
+	}
+}
+
+func TestAddAndLookupNode(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		toAdd [][]byte
+	}{
+		{
+			name: "a",
+			toAdd: [][]byte{
+				[]byte("aaaaaa"),
+				[]byte("aaaaab"),
+				[]byte("abbbb"),
+				[]byte("abbba"),
+				[]byte("bbbbba"),
+				[]byte("bbbaaa"),
+				[]byte("bbbaab"),
+				[]byte("aa"),
+				[]byte("b"),
+			},
+		},
+		{
+			name: "simple",
+			toAdd: [][]byte{
+				[]byte("/"),
+				[]byte("index.html"),
+				[]byte("img/1.png"),
+				[]byte("img/2.png"),
+				[]byte("robots.txt"),
+			},
+		},
+		{
+			name: "nested-prefix-is-not-collapsed",
+			toAdd: [][]byte{
+				[]byte("index.html"),
+				[]byte("img/1.png"),
+				[]byte("img/2/test1.png"),
+				[]byte("img/2/test2.png"),
+				[]byte("robots.txt"),
+			},
+		},
+		{
+			name: "conflicting-path",
+			toAdd: [][]byte{
+				[]byte("app.js.map"),
+				[]byte("app.js"),
+			},
+		},
+		{
+			name: "spa-website",
+			toAdd: [][]byte{
+				[]byte("css/"),
+				[]byte("css/app.css"),
+				[]byte("favicon.ico"),
+				[]byte("img/"),
+				[]byte("img/logo.png"),
+				[]byte("index.html"),
+				[]byte("js/"),
+				[]byte("js/chunk-vendors.js.map"),
+				[]byte("js/chunk-vendors.js"),
+				[]byte("js/app.js.map"),
+				[]byte("js/app.js"),
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			n := New()
+
+			for i := 0; i < len(tc.toAdd); i++ {
+				c := tc.toAdd[i]
+				e := append(make([]byte, 32-len(c)), c...)
+				err := n.Add(c, e, nil, nil)
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+				for j := 0; j < i+1; j++ {
+					d := tc.toAdd[j]
+					node, err := n.LookupNode(d, nil)
+					if err != nil {
+						t.Fatalf("expected no error, got %v", err)
+					}
+					de := append(make([]byte, 32-len(d)), d...)
+					if !bytes.Equal(node.entry, de) {
+						t.Fatalf("expected value %x, got %x", d, node.entry)
+					}
+					if !node.IsValueType() {
+						t.Fatalf("expected value type, got %v", strconv.FormatInt(int64(node.nodeType), 2))
+					}
+				}
+			}
+		})
 	}
 }
 
