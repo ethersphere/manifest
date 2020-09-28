@@ -381,12 +381,31 @@ func (f *fork) bytes() (b []byte, err error) {
 			return b, err1
 		}
 
+		metadataJSONBytesSizeWithSize := len(metadataJSONBytes) + nodeForkMetadataBytesSize
+
+		// pad JSON bytes if necessary
+		if metadataJSONBytesSizeWithSize < nodeObfuscationKeySize {
+			paddingLength := nodeObfuscationKeySize - metadataJSONBytesSizeWithSize
+			padding := make([]byte, paddingLength)
+			for i := range padding {
+				padding[i] = '\n'
+			}
+			metadataJSONBytes = append(metadataJSONBytes, padding...)
+		} else if metadataJSONBytesSizeWithSize > nodeObfuscationKeySize {
+			paddingLength := nodeObfuscationKeySize - metadataJSONBytesSizeWithSize%nodeObfuscationKeySize
+			padding := make([]byte, paddingLength)
+			for i := range padding {
+				padding[i] = '\n'
+			}
+			metadataJSONBytes = append(metadataJSONBytes, padding...)
+		}
+
 		metadataJSONBytesSize := len(metadataJSONBytes)
 		if metadataJSONBytesSize > int(maxUint16) {
 			return b, ErrMetadataTooLarge
 		}
 
-		mBytesSize := make([]byte, 2)
+		mBytesSize := make([]byte, nodeForkMetadataBytesSize)
 		binary.BigEndian.PutUint16(mBytesSize, uint16(metadataJSONBytesSize))
 		b = append(b, mBytesSize...)
 
