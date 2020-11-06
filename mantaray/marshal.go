@@ -87,6 +87,14 @@ var obfuscationKeyFn = func(p []byte) (n int, err error) {
 	return rand.Read(p)
 }
 
+// SetObfuscationKeyFn allows configuring custom function for generating
+// obfuscation key.
+//
+// NOTE: This should only be used in tests.
+func SetObfuscationKeyFn(fn func([]byte) (int, error)) {
+	obfuscationKeyFn = fn
+}
+
 // MarshalBinary serialises the node
 func (n *Node) MarshalBinary() (bytes []byte, err error) {
 	if n.forks == nil {
