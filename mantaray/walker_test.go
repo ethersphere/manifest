@@ -12,13 +12,23 @@ import (
 
 func TestWalkNode(t *testing.T) {
 	for _, tc := range []struct {
-		name  string
-		toAdd [][]byte
+		name     string
+		toAdd    [][]byte
+		expected [][]byte
 	}{
 		{
 			name: "simple",
 			toAdd: [][]byte{
 				[]byte("index.html"),
+				[]byte("img/1.png"),
+				[]byte("img/2.png"),
+				[]byte("robots.txt"),
+			},
+			expected: [][]byte{
+				[]byte(""),
+				[]byte("i"),
+				[]byte("index.html"),
+				[]byte("img/"),
 				[]byte("img/1.png"),
 				[]byte("img/2.png"),
 				[]byte("robots.txt"),
@@ -44,8 +54,8 @@ func TestWalkNode(t *testing.T) {
 
 				pathFound := false
 
-				for i := 0; i < len(tc.toAdd); i++ {
-					c := tc.toAdd[i]
+				for i := 0; i < len(tc.expected); i++ {
+					c := tc.expected[i]
 					if bytes.Equal(path, c) {
 						pathFound = true
 						break
@@ -64,8 +74,8 @@ func TestWalkNode(t *testing.T) {
 				t.Fatalf("no error expected, found: %s", err)
 			}
 
-			if len(tc.toAdd) != walkedCount {
-				t.Errorf("expected %d nodes, got %d", len(tc.toAdd), walkedCount)
+			if len(tc.expected) != walkedCount {
+				t.Errorf("expected %d nodes, got %d", len(tc.expected), walkedCount)
 			}
 
 		})

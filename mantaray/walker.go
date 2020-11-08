@@ -20,22 +20,18 @@ func walkNode(path []byte, l Loader, n *Node, walkFn WalkNodeFunc) error {
 		}
 	}
 
-	if n.IsValueType() {
-		err := walkNodeFnCopyBytes(path, n, nil, walkFn)
-		if err != nil {
-			return err
-		}
+	err := walkNodeFnCopyBytes(path, n, nil, walkFn)
+	if err != nil {
+		return err
 	}
 
-	if n.IsEdgeType() {
-		for _, v := range n.forks {
-			nextPath := append(path[:0:0], path...)
-			nextPath = append(nextPath, v.prefix...)
+	for _, v := range n.forks {
+		nextPath := append(path[:0:0], path...)
+		nextPath = append(nextPath, v.prefix...)
 
-			err := walkNode(nextPath, l, v.Node, walkFn)
-			if err != nil {
-				return err
-			}
+		err := walkNode(nextPath, l, v.Node, walkFn)
+		if err != nil {
+			return err
 		}
 	}
 
