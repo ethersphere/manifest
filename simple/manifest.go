@@ -33,6 +33,10 @@ type Manifest interface {
 	// For Manifest, this means the number of all the existing entries.
 	Length() int
 
+	// WalkEntry walks all entries, calling walkFn for each entry in the map.
+	// All errors that arise visiting entires are filtered by walkFn.
+	WalkEntry(string, WalkEntryFunc) error
+
 	encoding.BinaryMarshaler
 	encoding.BinaryUnmarshaler
 }
