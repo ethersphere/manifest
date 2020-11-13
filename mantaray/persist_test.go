@@ -6,6 +6,7 @@ package mantaray_test
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"sync"
 	"testing"
@@ -17,36 +18,37 @@ func TestPersistIdempotence(t *testing.T) {
 	n := mantaray.New()
 	paths := [][]byte{
 		[]byte("aa"),
-		// []byte("b"),
-		// []byte("aaaaaa"),
-		// []byte("aaaaab"),
-		// []byte("abbbb"),
-		// []byte("abbba"),
-		// []byte("bbbbba"),
-		// []byte("bbbaaa"),
-		// []byte("bbbaab"),
+		[]byte("b"),
+		[]byte("aaaaaa"),
+		[]byte("aaaaab"),
+		[]byte("abbbb"),
+		[]byte("abbba"),
+		[]byte("bbbbba"),
+		[]byte("bbbaaa"),
+		[]byte("bbbaab"),
 	}
+	ctx := context.Background()
 	var ls mantaray.LoadSaver = newMockLoadSaver()
 	for i := 0; i < len(paths); i++ {
 		c := paths[i]
-		err := n.Save(ls)
+		err := n.Save(ctx, ls)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
 		var v [32]byte
 		copy(v[:], c)
-		err = n.Add(c, v[:], nil, ls)
+		err = n.Add(ctx, c, v[:], nil, ls)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
 	}
-	err := n.Save(ls)
+	err := n.Save(ctx, ls)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 	for i := 0; i < len(paths); i++ {
 		c := paths[i]
-		m, err := n.Lookup(c, ls)
+		m, err := n.Lookup(ctx, c, ls)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
@@ -70,7 +72,7 @@ func newMockLoadSaver() *mockLoadSaver {
 	}
 }
 
-func (m *mockLoadSaver) Save(b []byte) ([]byte, error) {
+func (m *mockLoadSaver) Save(_ context.Context, b []byte) ([]byte, error) {
 	var a addr
 	hasher := sha256.New()
 	_, err := hasher.Write(b)
@@ -84,7 +86,7 @@ func (m *mockLoadSaver) Save(b []byte) ([]byte, error) {
 	return a[:], nil
 }
 
-func (m *mockLoadSaver) Load(ab []byte) ([]byte, error) {
+func (m *mockLoadSaver) Load(_ context.Context, ab []byte) ([]byte, error) {
 	var a addr
 	copy(a[:], ab)
 	m.mtx.Lock()

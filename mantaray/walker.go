@@ -4,23 +4,25 @@
 
 package mantaray
 
+import "context"
+
 // WalkNodeFunc is the type of the function called for each node visited
 // by WalkNode.
 type WalkNodeFunc func(path []byte, node *Node, err error) error
 
-func walkNodeFnCopyBytes(path []byte, node *Node, err error, walkFn WalkNodeFunc) error {
+func walkNodeFnCopyBytes(ctx context.Context, path []byte, node *Node, err error, walkFn WalkNodeFunc) error {
 	return walkFn(append(path[:0:0], path...), node, nil)
 }
 
 // walkNode recursively descends path, calling walkFn.
-func walkNode(path []byte, l Loader, n *Node, walkFn WalkNodeFunc) error {
+func walkNode(ctx context.Context, path []byte, l Loader, n *Node, walkFn WalkNodeFunc) error {
 	if n.forks == nil {
-		if err := n.load(l); err != nil {
+		if err := n.load(ctx, l); err != nil {
 			return err
 		}
 	}
 
-	err := walkNodeFnCopyBytes(path, n, nil, walkFn)
+	err := walkNodeFnCopyBytes(ctx, path, n, nil, walkFn)
 	if err != nil {
 		return err
 	}
@@ -29,7 +31,7 @@ func walkNode(path []byte, l Loader, n *Node, walkFn WalkNodeFunc) error {
 		nextPath := append(path[:0:0], path...)
 		nextPath = append(nextPath, v.prefix...)
 
-		err := walkNode(nextPath, l, v.Node, walkFn)
+		err := walkNode(ctx, nextPath, l, v.Node, walkFn)
 		if err != nil {
 			return err
 		}
@@ -41,12 +43,12 @@ func walkNode(path []byte, l Loader, n *Node, walkFn WalkNodeFunc) error {
 // WalkNode walks the node tree structure rooted at root, calling walkFn for
 // each node in the tree, including root. All errors that arise visiting nodes
 // are filtered by walkFn.
-func (n *Node) WalkNode(root []byte, l Loader, walkFn WalkNodeFunc) error {
-	node, err := n.LookupNode(root, l)
+func (n *Node) WalkNode(ctx context.Context, root []byte, l Loader, walkFn WalkNodeFunc) error {
+	node, err := n.LookupNode(ctx, root, l)
 	if err != nil {
 		err = walkFn(root, nil, err)
 	} else {
-		err = walkNode(root, l, node, walkFn)
+		err = walkNode(ctx, root, l, node, walkFn)
 	}
 	return err
 }
@@ -60,9 +62,9 @@ func walkFnCopyBytes(path []byte, isDir bool, err error, walkFn WalkFunc) error 
 }
 
 // walk recursively descends path, calling walkFn.
-func walk(path, prefix []byte, l Loader, n *Node, walkFn WalkFunc) error {
+func walk(ctx context.Context, path, prefix []byte, l Loader, n *Node, walkFn WalkFunc) error {
 	if n.forks == nil {
-		if err := n.load(l); err != nil {
+		if err := n.load(ctx, l); err != nil {
 			return err
 		}
 	}
@@ -93,7 +95,7 @@ func walk(path, prefix []byte, l Loader, n *Node, walkFn WalkFunc) error {
 
 	if n.IsEdgeType() {
 		for _, v := range n.forks {
-			err := walk(nextPath, v.prefix, l, v.Node, walkFn)
+			err := walk(ctx, nextPath, v.prefix, l, v.Node, walkFn)
 			if err != nil {
 				return err
 			}
@@ -106,12 +108,10 @@ func walk(path, prefix []byte, l Loader, n *Node, walkFn WalkFunc) error {
 // Walk walks the node tree structure rooted at root, calling walkFn for
 // each file or directory in the tree, including root. All errors that arise
 // visiting files and directories are filtered by walkFn.
-func (n *Node) Walk(root []byte, l Loader, walkFn WalkFunc) error {
-	node, err := n.LookupNode(root, l)
+func (n *Node) Walk(ctx context.Context, root []byte, l Loader, walkFn WalkFunc) error {
+	node, err := n.LookupNode(ctx, root, l)
 	if err != nil {
-		err = walkFn(root, false, err)
-	} else {
-		err = walk(root, []byte{}, l, node, walkFn)
+		return walkFn(root, false, err)
 	}
-	return err
+	return walk(ctx, root, []byte{}, l, node, walkFn)
 }

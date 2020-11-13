@@ -6,6 +6,7 @@ package mantaray
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"strconv"
 	"testing"
@@ -18,14 +19,16 @@ type nodeEntry struct {
 }
 
 func TestNilPath(t *testing.T) {
+	ctx := context.Background()
 	n := New()
-	_, err := n.Lookup(nil, nil)
+	_, err := n.Lookup(ctx, nil, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 }
 
 func TestAddAndLookup(t *testing.T) {
+	ctx := context.Background()
 	n := New()
 	testCases := [][]byte{
 		[]byte("aaaaaa"),
@@ -41,13 +44,13 @@ func TestAddAndLookup(t *testing.T) {
 	for i := 0; i < len(testCases); i++ {
 		c := testCases[i]
 		e := append(make([]byte, 32-len(c)), c...)
-		err := n.Add(c, e, nil, nil)
+		err := n.Add(ctx, c, e, nil, nil)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
 		for j := 0; j < i; j++ {
 			d := testCases[j]
-			m, err := n.Lookup(d, nil)
+			m, err := n.Lookup(ctx, d, nil)
 			if err != nil {
 				t.Fatalf("expected no error, got %v", err)
 			}
@@ -122,19 +125,20 @@ func TestAddAndLookupNode(t *testing.T) {
 			},
 		},
 	} {
+		ctx := context.Background()
 		t.Run(tc.name, func(t *testing.T) {
 			n := New()
 
 			for i := 0; i < len(tc.toAdd); i++ {
 				c := tc.toAdd[i]
 				e := append(make([]byte, 32-len(c)), c...)
-				err := n.Add(c, e, nil, nil)
+				err := n.Add(ctx, c, e, nil, nil)
 				if err != nil {
 					t.Fatalf("expected no error, got %v", err)
 				}
 				for j := 0; j < i+1; j++ {
 					d := tc.toAdd[j]
-					node, err := n.LookupNode(d, nil)
+					node, err := n.LookupNode(ctx, d, nil)
 					if err != nil {
 						t.Fatalf("expected no error, got %v", err)
 					}
@@ -207,6 +211,7 @@ func TestRemove(t *testing.T) {
 			},
 		},
 	} {
+		ctx := context.Background()
 		t.Run(tc.name, func(t *testing.T) {
 			n := New()
 
@@ -217,13 +222,13 @@ func TestRemove(t *testing.T) {
 					e = append(make([]byte, 32-len(c)), c...)
 				}
 				m := tc.toAdd[i].metadata
-				err := n.Add(c, e, m, nil)
+				err := n.Add(ctx, c, e, m, nil)
 				if err != nil {
 					t.Fatalf("expected no error, got %v", err)
 				}
 				for j := 0; j < i; j++ {
 					d := tc.toAdd[j].path
-					m, err := n.Lookup(d, nil)
+					m, err := n.Lookup(ctx, d, nil)
 					if err != nil {
 						t.Fatalf("expected no error, got %v", err)
 					}
@@ -236,11 +241,11 @@ func TestRemove(t *testing.T) {
 
 			for i := 0; i < len(tc.toRemove); i++ {
 				c := tc.toRemove[i]
-				err := n.Remove(c, nil)
+				err := n.Remove(ctx, c, nil)
 				if err != nil {
 					t.Fatalf("expected no error, got %v", err)
 				}
-				_, err = n.Lookup(c, nil)
+				_, err = n.Lookup(ctx, c, nil)
 				if !errors.Is(err, ErrNotFound) {
 					t.Fatalf("expected not found error, got %v", err)
 				}
@@ -291,13 +296,14 @@ func TestHasPrefix(t *testing.T) {
 			},
 		},
 	} {
+		ctx := context.Background()
 		t.Run(tc.name, func(t *testing.T) {
 			n := New()
 
 			for i := 0; i < len(tc.toAdd); i++ {
 				c := tc.toAdd[i]
 				e := append(make([]byte, 32-len(c)), c...)
-				err := n.Add(c, e, nil, nil)
+				err := n.Add(ctx, c, e, nil, nil)
 				if err != nil {
 					t.Fatalf("expected no error, got %v", err)
 				}
@@ -307,7 +313,7 @@ func TestHasPrefix(t *testing.T) {
 				testPrefix := tc.testPrefix[i]
 				shouldExist := tc.shouldExist[i]
 
-				exists, err := n.HasPrefix(testPrefix, nil)
+				exists, err := n.HasPrefix(ctx, testPrefix, nil)
 				if err != nil {
 					t.Fatalf("expected no error, got %v", err)
 				}

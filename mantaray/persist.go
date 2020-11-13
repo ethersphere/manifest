@@ -5,8 +5,10 @@
 package mantaray
 
 import (
+	"context"
 	"errors"
-	"sync"
+
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -20,13 +22,13 @@ var (
 // from a persistent storage
 // for read only operations only
 type Loader interface {
-	Load([]byte) ([]byte, error)
+	Load(ctx context.Context, reference []byte) (data []byte, err error)
 }
 
 // Saver defines a generic interface to persist nodes
 // for write operations
 type Saver interface {
-	Save([]byte) ([]byte, error)
+	Save(ctx context.Context, data []byte) (reference []byte, err error)
 }
 
 // LoadSaver is a composite interface of Loader and Saver
@@ -36,68 +38,55 @@ type LoadSaver interface {
 	Saver
 }
 
-func (n *Node) load(l Loader) error {
+func (n *Node) load(ctx context.Context, l Loader) error {
 	if n == nil || n.ref == nil {
 		return nil
 	}
 	if l == nil {
 		return ErrNoLoader
 	}
-	b, err := l.Load(n.ref)
+	b, err := l.Load(ctx, n.ref)
 	if err != nil {
 		return err
 	}
-	if err := n.UnmarshalBinary(b); err != nil {
-		return err
-	}
-	return nil
+	return n.UnmarshalBinary(b)
 }
 
 // Save persists a trie recursively  traversing the nodes
-func (n *Node) Save(s Saver) error {
+func (n *Node) Save(ctx context.Context, s Saver) error {
 	if s == nil {
 		return ErrNoSaver
 	}
-	errc := make(chan error, 1)
-	closed := make(chan struct{})
-	n.save(s, errc, closed)
-	select {
-	case err := <-errc:
-		return err
-	default:
-	}
-	return nil
-
+	return n.save(ctx, s)
 }
 
-func (n *Node) save(s Saver, errc chan error, closed chan struct{}) {
+func (n *Node) save(ctx context.Context, s Saver) error {
 	if n != nil && n.ref != nil {
-		return
+		return nil
 	}
-	var wg sync.WaitGroup
-	for _, f := range n.forks {
-		wg.Add(1)
-		go func(f *fork) {
-			defer wg.Done()
-			f.Node.save(s, errc, closed)
-		}(f)
-	}
-	wg.Wait()
 	select {
-	case <-closed:
-		return
+	case <-ctx.Done():
+		return ctx.Err()
 	default:
 	}
-	bytes, err := n.MarshalBinary()
-	if err == nil {
-		n.ref, err = s.Save(bytes)
+	eg, ectx := errgroup.WithContext(ctx)
+	for _, f := range n.forks {
+		f := f
+		eg.Go(func() error {
+			return f.Node.save(ectx, s)
+		})
 	}
+	if err := eg.Wait(); err != nil {
+		return err
+	}
+	bytes, err := n.MarshalBinary()
 	if err != nil {
-		select {
-		case errc <- err:
-			close(closed)
-		default:
-		}
+		return err
+	}
+	n.ref, err = s.Save(ectx, bytes)
+	if err != nil {
+		return err
 	}
 	n.forks = nil
+	return nil
 }

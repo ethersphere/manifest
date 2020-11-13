@@ -6,6 +6,7 @@ package mantaray
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"testing"
 )
@@ -35,13 +36,14 @@ func TestWalkNode(t *testing.T) {
 			},
 		},
 	} {
+		ctx := context.Background()
 		t.Run(tc.name, func(t *testing.T) {
 			n := New()
 
 			for i := 0; i < len(tc.toAdd); i++ {
 				c := tc.toAdd[i]
 				e := append(make([]byte, 32-len(c)), c...)
-				err := n.Add(c, e, nil, nil)
+				err := n.Add(ctx, c, e, nil, nil)
 				if err != nil {
 					t.Fatalf("expected no error, got %v", err)
 				}
@@ -69,7 +71,7 @@ func TestWalkNode(t *testing.T) {
 				return nil
 			}
 			// Expect no errors.
-			err := n.WalkNode([]byte{}, nil, walker)
+			err := n.WalkNode(ctx, []byte{}, nil, walker)
 			if err != nil {
 				t.Fatalf("no error expected, found: %s", err)
 			}
@@ -108,13 +110,14 @@ func TestWalk(t *testing.T) {
 			},
 		},
 	} {
+		ctx := context.Background()
 		t.Run(tc.name, func(t *testing.T) {
 			n := New()
 
 			for i := 0; i < len(tc.toAdd); i++ {
 				c := tc.toAdd[i]
 				e := append(make([]byte, 32-len(c)), c...)
-				err := n.Add(c, e, nil, nil)
+				err := n.Add(ctx, c, e, nil, nil)
 				if err != nil {
 					t.Fatalf("expected no error, got %v", err)
 				}
@@ -142,7 +145,7 @@ func TestWalk(t *testing.T) {
 				return nil
 			}
 			// Expect no errors.
-			err := n.Walk([]byte{}, nil, walker)
+			err := n.Walk(ctx, []byte{}, nil, walker)
 			if err != nil {
 				t.Fatalf("no error expected, found: %s", err)
 			}

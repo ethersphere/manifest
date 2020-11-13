@@ -6,6 +6,7 @@ package mantaray
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 )
@@ -141,9 +142,14 @@ func (n *Node) Metadata() map[string]string {
 }
 
 // LookupNode finds the node for a path or returns error if not found
-func (n *Node) LookupNode(path []byte, l Loader) (*Node, error) {
+func (n *Node) LookupNode(ctx context.Context, path []byte, l Loader) (*Node, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
 	if n.forks == nil {
-		if err := n.load(l); err != nil {
+		if err := n.load(ctx, l); err != nil {
 			return nil, err
 		}
 	}
@@ -156,14 +162,14 @@ func (n *Node) LookupNode(path []byte, l Loader) (*Node, error) {
 	}
 	c := common(f.prefix, path)
 	if len(c) == len(f.prefix) {
-		return f.Node.LookupNode(path[len(c):], l)
+		return f.Node.LookupNode(ctx, path[len(c):], l)
 	}
 	return nil, notFound(path)
 }
 
 // Lookup finds the entry for a path or returns error if not found
-func (n *Node) Lookup(path []byte, l Loader) ([]byte, error) {
-	node, err := n.LookupNode(path, l)
+func (n *Node) Lookup(ctx context.Context, path []byte, l Loader) ([]byte, error) {
+	node, err := n.LookupNode(ctx, path, l)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +177,12 @@ func (n *Node) Lookup(path []byte, l Loader) ([]byte, error) {
 }
 
 // Add adds an entry to the path
-func (n *Node) Add(path []byte, entry []byte, metadata map[string]string, ls LoadSaver) error {
+func (n *Node) Add(ctx context.Context, path []byte, entry []byte, metadata map[string]string, ls LoadSaver) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
 	if n.refBytesSize == 0 {
 		if len(entry) > 256 {
 			return fmt.Errorf("node entry size > 256: %d", len(entry))
@@ -196,7 +207,7 @@ func (n *Node) Add(path []byte, entry []byte, metadata map[string]string, ls Loa
 		return nil
 	}
 	if n.forks == nil {
-		if err := n.load(ls); err != nil {
+		if err := n.load(ctx, ls); err != nil {
 			return err
 		}
 		n.ref = nil
@@ -209,7 +220,7 @@ func (n *Node) Add(path []byte, entry []byte, metadata map[string]string, ls Loa
 		if len(path) > nodePrefixMaxSize {
 			prefix := path[:nodePrefixMaxSize]
 			rest := path[nodePrefixMaxSize:]
-			err := nn.Add(rest, entry, metadata, ls)
+			err := nn.Add(ctx, rest, entry, metadata, ls)
 			if err != nil {
 				return err
 			}
@@ -247,7 +258,7 @@ func (n *Node) Add(path []byte, entry []byte, metadata map[string]string, ls Loa
 	// NOTE: special case on edge split
 	nn.updateIsWithPathSeparator(path)
 	// add new for shared prefix
-	err := nn.Add(path[len(c):], entry, metadata, ls)
+	err := nn.Add(ctx, path[len(c):], entry, metadata, ls)
 	if err != nil {
 		return err
 	}
@@ -265,12 +276,17 @@ func (n *Node) updateIsWithPathSeparator(path []byte) {
 }
 
 // Remove removes a path from the node
-func (n *Node) Remove(path []byte, ls LoadSaver) error {
+func (n *Node) Remove(ctx context.Context, path []byte, ls LoadSaver) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
 	if len(path) == 0 {
 		return ErrEmptyPath
 	}
 	if n.forks == nil {
-		if err := n.load(ls); err != nil {
+		if err := n.load(ctx, ls); err != nil {
 			return err
 		}
 	}
@@ -288,7 +304,7 @@ func (n *Node) Remove(path []byte, ls LoadSaver) error {
 		delete(n.forks, path[0])
 		return nil
 	}
-	return f.Node.Remove(rest, ls)
+	return f.Node.Remove(ctx, rest, ls)
 }
 
 func common(a, b []byte) (c []byte) {
@@ -299,9 +315,14 @@ func common(a, b []byte) (c []byte) {
 }
 
 // HasPrefix tests whether the node contains prefix path.
-func (n *Node) HasPrefix(path []byte, l Loader) (bool, error) {
+func (n *Node) HasPrefix(ctx context.Context, path []byte, l Loader) (bool, error) {
+	select {
+	case <-ctx.Done():
+		return false, ctx.Err()
+	default:
+	}
 	if n.forks == nil {
-		if err := n.load(l); err != nil {
+		if err := n.load(ctx, l); err != nil {
 			return false, err
 		}
 	}
@@ -314,7 +335,7 @@ func (n *Node) HasPrefix(path []byte, l Loader) (bool, error) {
 	}
 	c := common(f.prefix, path)
 	if len(c) == len(f.prefix) {
-		return f.Node.HasPrefix(path[len(c):], l)
+		return f.Node.HasPrefix(ctx, path[len(c):], l)
 	}
 	if bytes.HasPrefix(f.prefix, path) {
 		return true, nil

@@ -6,6 +6,7 @@ package mantaray
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	mrand "math/rand"
 	"reflect"
@@ -147,6 +148,7 @@ func TestUnmarshal02(t *testing.T) {
 }
 
 func TestMarshal(t *testing.T) {
+	ctx := context.Background()
 	n := New()
 	defer func(r func(*fork) []byte) { refBytes = r }(refBytes)
 	i := uint8(0)
@@ -163,7 +165,7 @@ func TestMarshal(t *testing.T) {
 			e = append(make([]byte, 32-len(c)), c...)
 		}
 		m := testEntries[i].metadata
-		err := n.Add(c, e, m, nil)
+		err := n.Add(ctx, c, e, m, nil)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
