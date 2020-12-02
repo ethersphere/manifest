@@ -83,7 +83,7 @@ func (n *Node) save(ctx context.Context, s Saver) error {
 	if err != nil {
 		return err
 	}
-	n.ref, err = s.Save(ectx, bytes)
+	n.ref, err = s.Save(ctx, bytes)
 	if err != nil {
 		return err
 	}
