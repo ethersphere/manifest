@@ -215,6 +215,9 @@ func (n *Node) Add(ctx context.Context, path []byte, entry []byte, metadata map[
 	f := n.forks[path[0]]
 	if f == nil {
 		nn := New()
+		if len(n.obfuscationKey) > 0 {
+			nn.SetObfuscationKey(n.obfuscationKey)
+		}
 		nn.refBytesSize = n.refBytesSize
 		// check for prefix size limit
 		if len(path) > nodePrefixMaxSize {
@@ -246,6 +249,9 @@ func (n *Node) Add(ctx context.Context, path []byte, entry []byte, metadata map[
 	if len(rest) > 0 {
 		// move current common prefix node
 		nn = New()
+		if len(n.obfuscationKey) > 0 {
+			nn.SetObfuscationKey(n.obfuscationKey)
+		}
 		nn.refBytesSize = n.refBytesSize
 		f.Node.updateIsWithPathSeparator(rest)
 		nn.forks[rest[0]] = &fork{rest, f.Node}
