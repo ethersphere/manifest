@@ -15,6 +15,14 @@ const (
 	PathSeparator = '/' // path separator
 )
 
+var (
+	DefaultObfuscationKey []byte
+)
+
+func init() {
+	DefaultObfuscationKey = make([]byte, 32)
+}
+
 // Error used when lookup path does not match
 var (
 	ErrNotFound         = errors.New("not found")
