@@ -16,11 +16,11 @@ const (
 )
 
 var (
-	DefaultObfuscationKey []byte
+	ZeroObfuscationKey []byte
 )
 
 func init() {
-	DefaultObfuscationKey = make([]byte, 32)
+	ZeroObfuscationKey = make([]byte, 32)
 }
 
 // Error used when lookup path does not match
