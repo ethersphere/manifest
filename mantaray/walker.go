@@ -12,10 +12,10 @@ import (
 
 // EachNodeFunc is the type of the function called for each node visited
 // by EachNodeAsync.
-type EachNodeFunc func(path []byte, node *Node, err error) error
+type EachNodeFunc func(path []byte, node *Node) error
 
-func eachNodeFnCopyBytes(ctx context.Context, path []byte, node *Node, err error, eachNodeFn EachNodeFunc) error {
-	return eachNodeFn(append(path[:0:0], path...), node, nil)
+func eachNodeFnCopyBytes(ctx context.Context, path []byte, node *Node, eachNodeFn EachNodeFunc) error {
+	return eachNodeFn(append(path[:0:0], path...), node)
 }
 
 // eachNodeAsync recursively descends path, calling eachNodeFn.
@@ -26,7 +26,7 @@ func eachNodeAsync(ctx context.Context, path []byte, l Loader, n *Node, eachNode
 		}
 	}
 
-	err := eachNodeFnCopyBytes(ctx, path, n, nil, eachNodeFn)
+	err := eachNodeFnCopyBytes(ctx, path, n, eachNodeFn)
 	if err != nil {
 		return err
 	}
@@ -48,24 +48,22 @@ func eachNodeAsync(ctx context.Context, path []byte, l Loader, n *Node, eachNode
 }
 
 // EachNodeAsync walks the node tree structure rooted at root, calling
-// eachNodeFn for each node in the tree, including root. All errors that arise
-// visiting nodes are filtered by eachNodeFn.
+// eachNodeFn for each node in the tree, including root.
 func (n *Node) EachNodeAsync(ctx context.Context, root []byte, l Loader, eachNodeFn EachNodeFunc) error {
 	node, err := n.LookupNode(ctx, root, l)
 	if err != nil {
-		err = eachNodeFn(root, nil, err)
-	} else {
-		err = eachNodeAsync(ctx, root, l, node, eachNodeFn)
+		return err
 	}
-	return err
+
+	return eachNodeAsync(ctx, root, l, node, eachNodeFn)
 }
 
 // EachPathFunc is the type of the function called for each file or directory
 // visited by EachPathAsync.
-type EachPathFunc func(path []byte, isDir bool, err error) error
+type EachPathFunc func(path []byte, isDir bool) error
 
-func eachPathFnCopyBytes(path []byte, isDir bool, err error, eachPathFn EachPathFunc) error {
-	return eachPathFn(append(path[:0:0], path...), isDir, nil)
+func eachPathFnCopyBytes(path []byte, isDir bool, eachPathFn EachPathFunc) error {
+	return eachPathFn(append(path[:0:0], path...), isDir)
 }
 
 // eachPathAsync recursively descends path, calling eachPathFn.
@@ -81,7 +79,7 @@ func eachPathAsync(ctx context.Context, path, prefix []byte, l Loader, n *Node, 
 	for i := 0; i < len(prefix); i++ {
 		if prefix[i] == PathSeparator {
 			// path ends with separator
-			err := eachPathFnCopyBytes(nextPath, true, nil, eachPathFn)
+			err := eachPathFnCopyBytes(nextPath, true, eachPathFn)
 			if err != nil {
 				return err
 			}
@@ -93,7 +91,7 @@ func eachPathAsync(ctx context.Context, path, prefix []byte, l Loader, n *Node, 
 		if nextPath[len(nextPath)-1] == PathSeparator {
 			// path ends with separator; already reported
 		} else {
-			err := eachPathFnCopyBytes(nextPath, false, nil, eachPathFn)
+			err := eachPathFnCopyBytes(nextPath, false, eachPathFn)
 			if err != nil {
 				return err
 			}
@@ -116,12 +114,12 @@ func eachPathAsync(ctx context.Context, path, prefix []byte, l Loader, n *Node, 
 }
 
 // EachPathAsync walks the node tree structure rooted at root, calling eachPathFn
-// for each file or directory in the tree, including root. All errors that arise
-// visiting files and directories are filtered by eachPathFn.
+// for each file or directory in the tree, including root.
 func (n *Node) EachPathAsync(ctx context.Context, root []byte, l Loader, eachPathFn EachPathFunc) error {
 	node, err := n.LookupNode(ctx, root, l)
 	if err != nil {
-		return eachPathFn(root, false, err)
+		return err
 	}
+
 	return eachPathAsync(ctx, root, []byte{}, l, node, eachPathFn)
 }

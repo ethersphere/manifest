@@ -53,7 +53,7 @@ func TestWalkNode(t *testing.T) {
 			var walkerMu sync.Mutex
 			walkedCount := 0
 
-			walker := func(path []byte, node *Node, err error) error {
+			walker := func(path []byte, node *Node) error {
 				walkerMu.Lock()
 				defer walkerMu.Unlock()
 
@@ -131,7 +131,7 @@ func TestWalk(t *testing.T) {
 			var walkerMu sync.Mutex
 			walkedCount := 0
 
-			walker := func(path []byte, isDir bool, err error) error {
+			walker := func(path []byte, isDir bool) error {
 				walkerMu.Lock()
 				defer walkerMu.Unlock()
 
