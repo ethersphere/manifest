@@ -5,7 +5,9 @@
 package simple_test
 
 import (
+	"context"
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/ethersphere/manifest/simple"
@@ -30,9 +32,13 @@ func TestWalkEntry(t *testing.T) {
 				t.Fatalf("expected %d entries, found %d", len(tc.entries), manifestLen)
 			}
 
+			var walkerMu sync.Mutex
 			walkedCount := 0
 
-			walker := func(path string, entry simple.Entry, err error) error {
+			walker := func(path string, entry simple.Entry) error {
+				walkerMu.Lock()
+				defer walkerMu.Unlock()
+
 				walkedCount++
 
 				pathFound := false
@@ -52,7 +58,7 @@ func TestWalkEntry(t *testing.T) {
 				return nil
 			}
 			// Expect no errors.
-			err := m.WalkEntry("", walker)
+			err := m.EachEntryAsync(context.Background(), "", walker)
 			if err != nil {
 				t.Fatalf("no error expected, found: %s", err)
 			}

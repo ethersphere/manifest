@@ -4,21 +4,32 @@
 
 package simple
 
-// WalkEntryFunc is the type of the function called for each entry visited
-// by WalkEntry.
-type WalkEntryFunc func(path string, entry Entry, err error) error
+import (
+	"context"
 
-func (m *manifest) WalkEntry(root string, walkFn WalkEntryFunc) (err error) {
+	"golang.org/x/sync/errgroup"
+)
+
+// EachEntryFunc is the type of the function called for each entry visited
+// by EachEntryAsync.
+type EachEntryFunc func(path string, entry Entry) error
+
+func (m *manifest) EachEntryAsync(ctx context.Context, root string, walkFn EachEntryFunc) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	eg, _ := errgroup.WithContext(ctx)
+
 	for k, v := range m.Entries {
+		k := k
+		v := v
+
 		entry := newEntry(v.Ref, v.Meta)
-		err = walkFn(k, entry, nil)
-		if err != nil {
-			return err
-		}
+
+		eg.Go(func() error {
+			return walkFn(k, entry)
+		})
 	}
 
-	return nil
+	return eg.Wait()
 }
