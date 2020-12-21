@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 )
 
@@ -49,9 +50,13 @@ func TestWalkNode(t *testing.T) {
 				}
 			}
 
+			var walkerMu sync.Mutex
 			walkedCount := 0
 
 			walker := func(path []byte, node *Node, err error) error {
+				walkerMu.Lock()
+				defer walkerMu.Unlock()
+
 				walkedCount++
 
 				pathFound := false
@@ -71,7 +76,7 @@ func TestWalkNode(t *testing.T) {
 				return nil
 			}
 			// Expect no errors.
-			err := n.WalkNode(ctx, []byte{}, nil, walker)
+			err := n.EachNodeAsync(ctx, []byte{}, nil, walker)
 			if err != nil {
 				t.Fatalf("no error expected, found: %s", err)
 			}
@@ -123,9 +128,13 @@ func TestWalk(t *testing.T) {
 				}
 			}
 
+			var walkerMu sync.Mutex
 			walkedCount := 0
 
 			walker := func(path []byte, isDir bool, err error) error {
+				walkerMu.Lock()
+				defer walkerMu.Unlock()
+
 				walkedCount++
 
 				pathFound := false
@@ -145,7 +154,7 @@ func TestWalk(t *testing.T) {
 				return nil
 			}
 			// Expect no errors.
-			err := n.Walk(ctx, []byte{}, nil, walker)
+			err := n.EachPathAsync(ctx, []byte{}, nil, walker)
 			if err != nil {
 				t.Fatalf("no error expected, found: %s", err)
 			}
