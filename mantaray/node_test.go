@@ -142,6 +142,9 @@ func TestAddAndLookupNode(t *testing.T) {
 					if err != nil {
 						t.Fatalf("expected no error, got %v", err)
 					}
+					if !node.IsValueType() {
+						t.Fatalf("found node %v is not a value type",  node)
+					}
 					de := append(make([]byte, 32-len(d)), d...)
 					if !bytes.Equal(node.entry, de) {
 						t.Fatalf("expected value %x, got %x", d, node.entry)
