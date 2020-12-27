@@ -181,6 +181,9 @@ func (n *Node) Lookup(ctx context.Context, path []byte, l Loader) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
+	if !node.IsValueType() && len(path) > 0 {
+		return nil, notFound(path)
+	}
 	return node.entry, nil
 }
 
