@@ -181,6 +181,9 @@ func (n *Node) Lookup(ctx context.Context, path []byte, l Loader) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
+	if !node.IsValueType() && len(path) > 0 {
+		return nil, notFound(path)
+	}
 	return node.entry, nil
 }
 
@@ -207,6 +210,7 @@ func (n *Node) Add(ctx context.Context, path []byte, entry []byte, metadata map[
 
 	if len(path) == 0 {
 		n.entry = entry
+		n.makeValue()
 		if len(metadata) > 0 {
 			n.metadata = metadata
 			n.makeWithMetadata()

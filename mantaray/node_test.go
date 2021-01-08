@@ -92,6 +92,14 @@ func TestAddAndLookupNode(t *testing.T) {
 			},
 		},
 		{
+			// mantaray.nodePrefixMaxSize number of '.'
+			name: "nested-value-node-is-recognized",
+			toAdd: [][]byte{
+				[]byte("..............................@"),
+				[]byte(".............................."),
+			},
+		},
+		{
 			name: "nested-prefix-is-not-collapsed",
 			toAdd: [][]byte{
 				[]byte("index.html"),
@@ -141,6 +149,9 @@ func TestAddAndLookupNode(t *testing.T) {
 					node, err := n.LookupNode(ctx, d, nil)
 					if err != nil {
 						t.Fatalf("expected no error, got %v", err)
+					}
+					if !node.IsValueType() {
+						t.Fatalf("found node %v is not a value type", node)
 					}
 					de := append(make([]byte, 32-len(d)), d...)
 					if !bytes.Equal(node.entry, de) {
